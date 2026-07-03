@@ -3,8 +3,7 @@ import { cookies } from 'next/headers'
 import { SuccessCasesManager } from './success-cases-manager'
 
 export default async function AdminSuccessCasesPage() {
-  const cookieStore = cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
 
   const { data: cases } = await supabase
     .from('success_cases')
@@ -15,9 +14,9 @@ export default async function AdminSuccessCasesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">成功事例ライブラリ</h1>
+        <h1 className="text-2xl font-bold">æåäºä¾ã©ã¤ãã©ãª</h1>
         <p className="text-muted-foreground mt-1">
-          業種別の成功事例を蓄積し、次の店舗への横展開に活用します
+          æ¥­ç¨®å¥ã®æåäºä¾ãèç©ããæ¬¡ã®åºèã¸ã®æ¨ªå±éã«æ´»ç¨ãã¾ã
         </p>
       </div>
       <SuccessCasesManager cases={cases || []} />
