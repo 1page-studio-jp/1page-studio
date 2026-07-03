@@ -10,8 +10,7 @@ import os from 'os'
 const execFileAsync = promisify(execFile)
 
 export async function POST(request: NextRequest) {
-  const cookieStore = cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
 
   // Auth check
   const { data: { session } } = await supabase.auth.getSession()
@@ -81,8 +80,8 @@ export async function POST(request: NextRequest) {
     // Clean up temp file
     await fs.unlink(outputPath).catch(() => {})
 
-    const safeStoreName = store.store_name.replace(/[^\w　-鿿]/g, '_')
-    const downloadFilename = `1PageStudio_${safeStoreName}_${year}年${month}月レポート.pdf`
+    const safeStoreName = store.store_name.replace(/[^\wã-é¿¿]/g, '_')
+    const downloadFilename = `1PageStudio_${safeStoreName}_${year}å¹´${month}æã¬ãã¼ã.pdf`
 
     return new NextResponse(pdfBuffer, {
       status: 200,
@@ -103,8 +102,7 @@ export async function POST(request: NextRequest) {
 
 // GET: check if report exists / get metadata
 export async function GET(request: NextRequest) {
-  const cookieStore = cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
 
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
