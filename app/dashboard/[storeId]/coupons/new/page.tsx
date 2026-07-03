@@ -3,257 +3,174 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
+import { ArrowLeft } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { ArrowLeft, Tag, Sparkles } from 'lucide-react'
+import type { CouponStatus } from '@/types'
 
-interface NewCouponPageProps {
-  params: { storeId: string }
+type FormState = {
+  coupon_name: string
+  discount_description: string
+  usage_conditions: string
+  expiry_date: string
+  display_status: CouponStatus
 }
 
-export default function NewCouponPage({ params }: NewCouponPageProps) {
+export default function NewCouponPage({ params }: { params: { storeId: string } }) {
   const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    discount_type: 'percent' as 'percent' | 'fixed' | 'gift',
-    discount_value: '',
-    coupon_code: '',
-    valid_from: '',
-    valid_until: '',
-    usage_limit: '',
-    display_status: 'visible' as CouponStatus,
+  const [form, setForm] = useState<FormState>({
+    coupon_name: '',
+    discount_description: '',
+    usage_conditions: '',
+    expiry_date: '',
+    display_status: 'visible',
   })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const set = (key: string, value: any) => setForm(f => ({ ...f, [key]: value }))
+  function set<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm(prev => ({ ...prev, [key]: value }))
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.title.trim()) { setError('クーポン名を入力してください'); return }
     setLoading(true)
-    setError('')
+    setError(null)
     try {
       const res = await fetch('/api/coupons', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           store_id: params.storeId,
-          title: form.title.trim(),
-          description: form.description.trim() || null,
-          discount_type: form.discount_type,
-          discount_value: form.discount_value ? Number(form.discount_value) : 0,
-          coupon_code: form.coupon_code.trim() || null,
-          valid_from: form.valid_from || null,
-          valid_until: form.valid_until || null,
-          usage_limit: form.usage_limit ? Number(form.usage_limit) : null,
+          coupon_name: form.coupon_name,
+          discount_description: form.discount_description,
+          usage_conditions: form.usage_conditions || null,
+          expiry_date: form.expiry_date || null,
           display_status: form.display_status,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || '作成に失敗しました')
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || '作成に失敗しました')
+      }
       router.push(`/dashboard/${params.storeId}/coupons`)
-      router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '作成に失敗しました')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="p-6 md:p-8 max-w-2xl mx-auto">
-      <div className="mb-6">
-        <Link
-          href={`/dashboard/${params.storeId}/coupons`}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          クーポン一覧に戻る
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Link href={`/dashboard/${params.storeId}/coupons`}>
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            戻る
+          </Button>
         </Link>
         <h1 className="text-2xl font-bold">新規クーポン作成</h1>
-        <p className="text-muted-foreground mt-1">LP に表示するクーポンを設定します</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Tag className="h-4 w-4" />
-              基本情報
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="title">クーポン名 *</Label>
-              <Input
-                id="title"
-                placeholder="例: 初回限定20%OFF"
-                value={form.title}
-                onChange={e => set('title', e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">説明文</Label>
-              <Textarea
-                id="description"
-                placeholder="クーポンの詳細や利用条件などを入力"
-                value={form.description}
-                onChange={e => set('description', e.target.value)}
-                rows={3}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Discount */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">割引設定</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>割引タイプ</Label>
-              <div className="flex gap-3">
-                {[
-                  { value: 'percent', label: '割引率 (%)' },
-                  { value: 'fixed', label: '割引額 (円)' },
-                  { value: 'gift', label: '特典・サービス' },
-                ].map(({ value, label }) => (
-                  <label key={value} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="discount_type"
-                      value={value}
-                      checked={form.discount_type === value}
-                      onChange={() => set('discount_type', value)}
-                      className="accent-primary"
-                    />
-                    <span className="text-sm">{label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {form.discount_type !== 'gift' && (
-              <div className="space-y-2">
-                <Label htmlFor="discount_value">
-                  {form.discount_type === 'percent' ? '割引率 (%)' : '割引額 (円)'}
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="discount_value"
-                    type="number"
-                    min="0"
-                    max={form.discount_type === 'percent' ? 100 : undefined}
-                    placeholder={form.discount_type === 'percent' ? '20' : '1000'}
-                    value={form.discount_value}
-                    onChange={e => set('discount_value', e.target.value)}
-                    className="pr-12"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                    {form.discount_type === 'percent' ? '%' : '円'}
-                  </span>
-                </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>クーポン情報</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="rounded-md bg-red-50 p-3 text-sm text-red-600">
+                {error}
               </div>
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="coupon_code">クーポンコード（任意）</Label>
-              <Input
-                id="coupon_code"
-                placeholder="例: WELCOME20"
-                value={form.coupon_code}
-                onChange={e => set('coupon_code', e.target.value.toUpperCase())}
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">LP に表示するコード。空欄の場合は非表示</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Period & Limit */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">有効期間・制限</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="valid_from">開始日（任意）</Label>
-                <Input
-                  id="valid_from"
-                  type="date"
-                  value={form.valid_from}
-                  onChange={e => set('valid_from', e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="valid_until">終了日（任意）</Label>
-                <Input
-                  id="valid_until"
-                  type="date"
-                  value={form.valid_until}
-                  onChange={e => set('valid_until', e.target.value)}
-                  min={form.valid_from || undefined}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="usage_limit">利用上限回数（任意）</Label>
-              <Input
-                id="usage_limit"
-                type="number"
-                min="1"
-                placeholder="無制限の場合は空欄"
-                value={form.usage_limit}
-                onChange={e => set('usage_limit', e.target.value)}
-              />
-            </div>
-            <label className="flex items-center gap-3 cursor-pointer">
+              <label className="text-sm font-medium" htmlFor="coupon_name">
+                クーポン名 <span className="text-red-500">*</span>
+              </label>
               <input
-                type="checkbox"
-                checked={form.display_status === 'visible'}
-                onChange={e => set('display_status', e.target.checked ? 'visible' : 'hidden')}
-                className="w-4 h-4 accent-primary"
+                id="coupon_name"
+                type="text"
+                required
+                value={form.coupon_name}
+                onChange={e => set('coupon_name', e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="例: 初回限定10%OFF"
               />
-              <span className="text-sm font-medium">このクーポンを有効にする（LP に表示）</span>
-            </label>
-          </CardContent>
-        </Card>
+            </div>
 
-        {error && (
-          <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="discount_description">
+                割引内容 <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="discount_description"
+                type="text"
+                required
+                value={form.discount_description}
+                onChange={e => set('discount_description', e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="例: 10%割引"
+              />
+            </div>
 
-        <div className="flex gap-3 justify-end">
-          <Link href={`/dashboard/${params.storeId}/coupons`}>
-            <Button type="button" variant="outline">キャンセル</Button>
-          </Link>
-          <Button type="submit" disabled={loading} className="gap-2">
-            {loading ? (
-              <>
-                <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                作成中...
-              </>
-            ) : (
-              <>
-                <Tag className="h-4 w-4" />
-                クーポンを作成
-              </>
-            )}
-          </Button>
-        </div>
-      </form>
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="usage_conditions">
+                利用条件
+              </label>
+              <textarea
+                id="usage_conditions"
+                value={form.usage_conditions}
+                onChange={e => set('usage_conditions', e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                rows={3}
+                placeholder="例: 初回ご来店のお客様限定"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="expiry_date">
+                有効期限
+              </label>
+              <input
+                id="expiry_date"
+                type="date"
+                value={form.expiry_date}
+                onChange={e => set('expiry_date', e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="display_status">
+                表示状態
+              </label>
+              <select
+                id="display_status"
+                value={form.display_status}
+                onChange={e => set('display_status', e.target.value as CouponStatus)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="visible">表示中</option>
+                <option value="hidden">非表示</option>
+                <option value="expired">期限切れ</option>
+              </select>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <Button type="submit" disabled={loading}>
+                {loading ? '作成中...' : 'クーポンを作成'}
+              </Button>
+              <Link href={`/dashboard/${params.storeId}/coupons`}>
+                <Button type="button" variant="outline">
+                  キャンセル
+                </Button>
+              </Link>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   )
 }
