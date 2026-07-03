@@ -6,8 +6,7 @@ import { AnalysisManager } from './analysis-manager'
 interface Props { params: { storeId: string } }
 
 export default async function AdminAnalysisPage({ params }: Props) {
-  const cookieStore = cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
 
   const { data: store } = await supabase
     .from('stores').select('id, store_name').eq('id', params.storeId).single()
@@ -23,7 +22,7 @@ export default async function AdminAnalysisPage({ params }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">AI分析管理</h1>
+        <h1 className="text-2xl font-bold">AIåæç®¡ç</h1>
         <p className="text-muted-foreground mt-1">{store.store_name}</p>
       </div>
       <AnalysisManager storeId={store.id} storeName={store.store_name} analyses={analyses || []} />
