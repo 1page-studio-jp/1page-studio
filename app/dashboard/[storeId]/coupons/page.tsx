@@ -24,30 +24,30 @@ export default async function CouponsPage({ params }: { params: { storeId: strin
   const now = new Date()
 
   function getCouponStatus(coupon: Coupon) {
-    if (!coupon.is_active) return { label: '無効', variant: 'secondary' as const }
-    if (coupon.valid_until && new Date(coupon.valid_until) < now) return { label: '期限切れ', variant: 'warning' as const }
-    if (coupon.valid_from && new Date(coupon.valid_from) > now) return { label: '未開始', variant: 'info' as const }
-    return { label: '有効', variant: 'success' as const }
+    if (coupon.display_status !== 'visible') return { label: 'ç¡å¹', variant: 'secondary' as const }
+    if (coupon.valid_until && new Date(coupon.valid_until) < now) return { label: 'æéåã', variant: 'warning' as const }
+    if (coupon.valid_from && new Date(coupon.valid_from) > now) return { label: 'æªéå§', variant: 'info' as const }
+    return { label: 'æå¹', variant: 'success' as const }
   }
 
   const activeCoupons = (coupons || []).filter(c => {
     const s = getCouponStatus(c)
-    return s.label === '有効'
+    return s.label === 'æå¹'
   })
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold">クーポン管理</h1>
+          <h1 className="text-2xl font-bold">ã¯ã¼ãã³ç®¡ç</h1>
           <p className="text-muted-foreground mt-1">
-            現在 <span className="font-medium text-foreground">{activeCoupons.length}件</span> が有効
+            ç¾å¨ <span className="font-medium text-foreground">{activeCoupons.length}ä»¶</span> ãæå¹
           </p>
         </div>
         <Link href={`/dashboard/${params.storeId}/coupons/new`}>
           <Button className="gap-2">
             <Plus className="h-4 w-4" />
-            新規クーポン
+            æ°è¦ã¯ã¼ãã³
           </Button>
         </Link>
       </div>
@@ -56,12 +56,12 @@ export default async function CouponsPage({ params }: { params: { storeId: strin
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Tag className="h-10 w-10 text-muted-foreground/40 mb-4" />
-            <p className="font-medium text-muted-foreground">クーポンがまだありません</p>
-            <p className="text-sm text-muted-foreground mt-1">LP に表示するクーポンを作成しましょう</p>
+            <p className="font-medium text-muted-foreground">ã¯ã¼ãã³ãã¾ã ããã¾ãã</p>
+            <p className="text-sm text-muted-foreground mt-1">LP ã«è¡¨ç¤ºããã¯ã¼ãã³ãä½æãã¾ããã</p>
             <Link href={`/dashboard/${params.storeId}/coupons/new`} className="mt-4">
               <Button size="sm" variant="outline" className="gap-2">
                 <Plus className="h-4 w-4" />
-                最初のクーポンを作る
+                æåã®ã¯ã¼ãã³ãä½ã
               </Button>
             </Link>
           </CardContent>
@@ -86,7 +86,7 @@ export default async function CouponsPage({ params }: { params: { storeId: strin
                         {isExpiringSoon && (
                           <Badge variant="warning" className="gap-1 text-xs">
                             <AlertCircle className="h-3 w-3" />
-                            もうすぐ期限
+                            ããããæé
                           </Badge>
                         )}
                       </div>
@@ -101,8 +101,8 @@ export default async function CouponsPage({ params }: { params: { storeId: strin
                           {coupon.discount_type === 'percent'
                             ? `${coupon.discount_value}% OFF`
                             : coupon.discount_type === 'fixed'
-                            ? `¥${coupon.discount_value?.toLocaleString()} OFF`
-                            : '特典あり'}
+                            ? `Â¥${coupon.discount_value?.toLocaleString()} OFF`
+                            : 'ç¹å¸ãã'}
                         </span>
 
                         {coupon.coupon_code && (
@@ -116,14 +116,14 @@ export default async function CouponsPage({ params }: { params: { storeId: strin
                           <span className="flex items-center gap-1">
                             <Calendar className="h-3.5 w-3.5" />
                             {coupon.valid_from ? format(new Date(coupon.valid_from), 'M/d', { locale: ja }) : ''}
-                            {coupon.valid_from && coupon.valid_until && ' 〜 '}
+                            {coupon.valid_from && coupon.valid_until && ' ã '}
                             {coupon.valid_until ? format(new Date(coupon.valid_until), 'M/d', { locale: ja }) : ''}
                           </span>
                         )}
 
                         {coupon.usage_limit != null && (
                           <span className="flex items-center gap-1">
-                            上限 {coupon.usage_limit}回
+                            ä¸é {coupon.usage_limit}å
                           </span>
                         )}
                       </div>
@@ -131,7 +131,7 @@ export default async function CouponsPage({ params }: { params: { storeId: strin
 
                     <div className="shrink-0">
                       <Link href={`/dashboard/${params.storeId}/coupons/${coupon.id}/edit`}>
-                        <Button variant="outline" size="sm">編集</Button>
+                        <Button variant="outline" size="sm">ç·¨é</Button>
                       </Link>
                     </div>
                   </div>
