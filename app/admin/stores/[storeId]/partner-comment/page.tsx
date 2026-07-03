@@ -8,8 +8,7 @@ interface Props {
 }
 
 export default async function PartnerCommentPage({ params }: Props) {
-  const cookieStore = cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
 
   const { data: store } = await supabase
     .from('stores')
@@ -30,7 +29,7 @@ export default async function PartnerCommentPage({ params }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">担当パートナーコメント</h1>
+        <h1 className="text-2xl font-bold tracking-tight">æå½ãã¼ããã¼ã³ã¡ã³ã</h1>
         <p className="text-muted-foreground mt-1">{store.store_name}</p>
       </div>
       <PartnerCommentEditor
