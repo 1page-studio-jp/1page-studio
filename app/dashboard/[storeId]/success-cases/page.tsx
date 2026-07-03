@@ -10,8 +10,7 @@ interface Props {
 }
 
 export default async function OwnerSuccessCasesPage({ params }: Props) {
-  const cookieStore = cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
 
   const { data: store } = await supabase
     .from('stores')
@@ -21,9 +20,9 @@ export default async function OwnerSuccessCasesPage({ params }: Props) {
 
   if (!store) notFound()
 
-  // 同業種の成功事例を取得（おすすめ優先）
-  // industry はテキスト型なので、industry_id へのマッピングが必要
-  // ここでは全件を取得してクライアント側でフィルター可能にする
+  // åæ¥­ç¨®ã®æåäºä¾ãåå¾ï¼ããããåªåï¼
+  // industry ã¯ãã­ã¹ãåãªã®ã§ãindustry_id ã¸ã®ãããã³ã°ãå¿è¦
+  // ããã§ã¯å¨ä»¶ãåå¾ãã¦ã¯ã©ã¤ã¢ã³ãå´ã§ãã£ã«ã¿ã¼å¯è½ã«ãã
   const { data: cases } = await supabase
     .from('success_cases')
     .select('*')
@@ -42,29 +41,29 @@ export default async function OwnerSuccessCasesPage({ params }: Props) {
             <BookOpen className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold">成功事例ライブラリ</h1>
-            <p className="text-sm text-indigo-200">他店舗の成功事例からヒントを得ましょう</p>
+            <h1 className="text-xl font-bold">æåäºä¾ã©ã¤ãã©ãª</h1>
+            <p className="text-sm text-indigo-200">ä»åºèã®æåäºä¾ãããã³ããå¾ã¾ããã</p>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-xl bg-white/10 px-4 py-3">
             <p className="text-2xl font-bold">{totalCases}</p>
-            <p className="text-xs text-indigo-200 mt-0.5">蓄積された成功事例</p>
+            <p className="text-xs text-indigo-200 mt-0.5">èç©ãããæåäºä¾</p>
           </div>
           <div className="rounded-xl bg-white/10 px-4 py-3">
             <p className="text-2xl font-bold">{featuredCases.length}</p>
-            <p className="text-xs text-indigo-200 mt-0.5">パートナー厳選のおすすめ</p>
+            <p className="text-xs text-indigo-200 mt-0.5">ãã¼ããã¼å³é¸ã®ãããã</p>
           </div>
         </div>
       </div>
 
       {/* How to use */}
       <div className="rounded-2xl bg-amber-50 border border-amber-200 px-5 py-4">
-        <p className="text-sm font-bold text-amber-800 mb-2">💡 活用のコツ</p>
+        <p className="text-sm font-bold text-amber-800 mb-2">ð¡ æ´»ç¨ã®ã³ã</p>
         <ul className="space-y-1 text-xs text-amber-700">
-          <li>• 「クーポン」事例：LINE登録率が低いときはここを参考に文言を変えてみましょう</li>
-          <li>• 「広告文」事例：広告のクリック率が低い場合、実績のある訴求文に切り替えるだけで改善することがあります</li>
-          <li>• 「LP」事例：キャッチコピーやメニュー掲載順を変えるだけで反応が変わります</li>
+          <li>â¢ ãã¯ã¼ãã³ãäºä¾ï¼LINEç»é²çãä½ãã¨ãã¯ãããåèã«æè¨ãå¤ãã¦ã¿ã¾ããã</li>
+          <li>â¢ ãåºåæãäºä¾ï¼åºåã®ã¯ãªãã¯çãä½ãå ´åãå®ç¸¾ã®ããè¨´æ±æã«åãæ¿ããã ãã§æ¹åãããã¨ãããã¾ã</li>
+          <li>â¢ ãLPãäºä¾ï¼ã­ã£ããã³ãã¼ãã¡ãã¥ã¼æ²è¼é ãå¤ããã ãã§åå¿ãå¤ããã¾ã</li>
         </ul>
       </div>
 
