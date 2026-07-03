@@ -220,8 +220,8 @@ export default function NewCouponPage({ params }: NewCouponPageProps) {
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
-                checked={form.display_status}
-                onChange={e => set('display_status', e.target.checked)}
+                checked={form.display_status === 'visible'}
+                onChange={e => set('display_status', e.target.checked ? 'visible' : 'hidden')}
                 className="w-4 h-4 accent-primary"
               />
               <span className="text-sm font-medium">このクーポンを有効にする（LP に表示）</span>
