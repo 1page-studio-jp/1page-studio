@@ -28,7 +28,7 @@ export default function NewCouponPage({ params }: NewCouponPageProps) {
     valid_from: '',
     valid_until: '',
     usage_limit: '',
-    is_active: true,
+    display_status: 'visible' as CouponStatus,
   })
 
   const set = (key: string, value: any) => setForm(f => ({ ...f, [key]: value }))
@@ -52,7 +52,7 @@ export default function NewCouponPage({ params }: NewCouponPageProps) {
           valid_from: form.valid_from || null,
           valid_until: form.valid_until || null,
           usage_limit: form.usage_limit ? Number(form.usage_limit) : null,
-          is_active: form.is_active,
+          display_status: form.display_status,
         }),
       })
       const data = await res.json()
@@ -220,8 +220,8 @@ export default function NewCouponPage({ params }: NewCouponPageProps) {
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
-                checked={form.is_active}
-                onChange={e => set('is_active', e.target.checked)}
+                checked={form.display_status}
+                onChange={e => set('display_status', e.target.checked)}
                 className="w-4 h-4 accent-primary"
               />
               <span className="text-sm font-medium">このクーポンを有効にする（LP に表示）</span>
