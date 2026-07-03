@@ -10,8 +10,7 @@ interface Props {
 }
 
 export default async function FunnelPage({ params, searchParams }: Props) {
-  const cookieStore = cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -34,7 +33,7 @@ export default async function FunnelPage({ params, searchParams }: Props) {
   const nextMonthDate = new Date(year, month, 1)
   const monthEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`
 
-  // ① 広告クリック + LP閲覧 (from ad_daily_reports)
+  // â  åºåã¯ãªãã¯ + LPé²è¦§ (from ad_daily_reports)
   const { data: adReports } = await supabase
     .from('ad_daily_reports')
     .select('clicks, lp_views, line_adds, conversions')
@@ -46,10 +45,10 @@ export default async function FunnelPage({ params, searchParams }: Props) {
   const lpViews = (adReports || []).reduce((s, r) => s + (r.lp_views || 0), 0)
   const lineAddsFromAd = (adReports || []).reduce((s, r) => s + (r.line_adds || 0), 0)
 
-  // ② LINE登録 — also count from direct LP visits (prefer ad_daily_reports sum)
+  // â¡ LINEç»é² â also count from direct LP visits (prefer ad_daily_reports sum)
   const lineAdds = lineAddsFromAd
 
-  // ③ クーポン取得 — count coupon_usages created this month
+  // â¢ ã¯ã¼ãã³åå¾ â count coupon_usages created this month
   const { count: couponGets } = await supabase
     .from('coupon_usages')
     .select('id', { count: 'exact', head: true })
@@ -57,7 +56,7 @@ export default async function FunnelPage({ params, searchParams }: Props) {
     .gte('created_at', `${monthStart}T00:00:00Z`)
     .lt('created_at', `${monthEnd}T00:00:00Z`)
 
-  // ④ 来店 — count conversions (ad conversions as proxy, or inquiries with status=visited)
+  // â£ æ¥åº â count conversions (ad conversions as proxy, or inquiries with status=visited)
   const visits = (adReports || []).reduce((s, r) => s + (r.conversions || 0), 0)
 
   const funnelData = buildFunnelData(
@@ -66,7 +65,7 @@ export default async function FunnelPage({ params, searchParams }: Props) {
     lineAdds,
     couponGets || 0,
     visits,
-    `${month}月`,
+    `${month}æ`,
   )
 
   // Build month selector options (last 6 months)
@@ -74,7 +73,7 @@ export default async function FunnelPage({ params, searchParams }: Props) {
   for (let i = 0; i < 6; i++) {
     const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
     const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    monthOptions.push({ value: val, label: `${d.getFullYear()}年${d.getMonth() + 1}月` })
+    monthOptions.push({ value: val, label: `${d.getFullYear()}å¹´${d.getMonth() + 1}æ` })
   }
 
   // Overall funnel rate (end-to-end: visits / ad_clicks)
@@ -87,10 +86,10 @@ export default async function FunnelPage({ params, searchParams }: Props) {
         <div>
           <div className="flex items-center gap-2">
             <Activity className="h-5 w-5 text-indigo-500" />
-            <h1 className="text-xl font-bold">集客ファネル</h1>
+            <h1 className="text-xl font-bold">éå®¢ãã¡ãã«</h1>
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">
-            広告から来店までの流れとボトルネックを確認
+            åºåããæ¥åºã¾ã§ã®æµãã¨ããã«ããã¯ãç¢ºèª
           </p>
         </div>
         {/* Month picker */}
@@ -116,13 +115,13 @@ export default async function FunnelPage({ params, searchParams }: Props) {
       {overallRate && (
         <div className="flex items-center justify-between rounded-2xl bg-slate-900 px-5 py-4 text-white">
           <div>
-            <p className="text-xs text-slate-400 mb-0.5">広告クリック → 来店 の総転換率</p>
+            <p className="text-xs text-slate-400 mb-0.5">åºåã¯ãªãã¯ â æ¥åº ã®ç·è»¢æç</p>
             <p className="text-3xl font-black tabular-nums">{overallRate}%</p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-slate-400">業界平均</p>
-            <p className="text-lg font-bold text-slate-300">1〜3%</p>
-            <p className="text-[10px] text-slate-500 mt-0.5">美容・サロン系の目安</p>
+            <p className="text-xs text-slate-400">æ¥­çå¹³å</p>
+            <p className="text-lg font-bold text-slate-300">1ã3%</p>
+            <p className="text-[10px] text-slate-500 mt-0.5">ç¾å®¹ã»ãµã­ã³ç³»ã®ç®å®</p>
           </div>
         </div>
       )}
@@ -131,9 +130,9 @@ export default async function FunnelPage({ params, searchParams }: Props) {
       {adClicks === 0 && lpViews === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 bg-white py-16 text-center">
           <Activity className="h-12 w-12 text-slate-200 mx-auto mb-4" />
-          <p className="font-medium text-muted-foreground">まだデータがありません</p>
+          <p className="font-medium text-muted-foreground">ã¾ã ãã¼ã¿ãããã¾ãã</p>
           <p className="text-sm text-muted-foreground/70 mt-1 max-w-xs mx-auto">
-            「数字を見る」→「データ入力」から広告データを入力すると、ここにファネルが表示されます
+            ãæ°å­ãè¦ããâããã¼ã¿å¥åãããåºåãã¼ã¿ãå¥åããã¨ãããã«ãã¡ãã«ãè¡¨ç¤ºããã¾ã
           </p>
         </div>
       ) : (
@@ -142,11 +141,11 @@ export default async function FunnelPage({ params, searchParams }: Props) {
 
       {/* How to read this */}
       <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-        <p className="text-xs font-semibold text-slate-500 mb-1.5">この画面の読み方</p>
+        <p className="text-xs font-semibold text-slate-500 mb-1.5">ãã®ç»é¢ã®èª­ã¿æ¹</p>
         <p className="text-xs text-slate-500 leading-relaxed">
-          各ステップの間の<span className="font-semibold text-orange-600">転換率</span>が低いところがボトルネックです。
-          オレンジ色で「要改善」と表示されているステップを優先的に改善しましょう。
-          下の改善提案は、そのステップに特化したアドバイスです。
+          åã¹ãããã®éã®<span className="font-semibold text-orange-600">è»¢æç</span>ãä½ãã¨ãããããã«ããã¯ã§ãã
+          ãªã¬ã³ã¸è²ã§ãè¦æ¹åãã¨è¡¨ç¤ºããã¦ããã¹ããããåªåçã«æ¹åãã¾ãããã
+          ä¸ã®æ¹åææ¡ã¯ããã®ã¹ãããã«ç¹åããã¢ããã¤ã¹ã§ãã
         </p>
       </div>
     </div>
