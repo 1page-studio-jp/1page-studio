@@ -1,8 +1,7 @@
-import OpenAI from 'openai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
 export interface StoreMetricsForAI {
   storeName: string
@@ -24,114 +23,95 @@ export interface StoreMetricsForAI {
 /** AIコメント・改善提案を生成 */
 export async function generateAiComment(metrics: StoreMetricsForAI): Promise<{
   comment: string
-  todos: string[]
-  suggestions: Array<{ type: string; title: string; description: string; priority: 'high' | 'medium' | 'low' }>
+  suggestions: Array<{ category: string; title: string; description: string; priority: 'high' | 'medium' | 'low' }>
 }> {
-  const prompt = `
-あなたは店舗マーケティングの専門アドバイザーです。
-以下の店舗データを分析し、店舗オーナーへの分かりやすいアドバイスを生成してください。
+  const prompt = `あなたは店舗集客の専門コンサルタントです。以下のデータを分析し、オーナーへのコメントと改善提案を生成してください。
 
-【店舗情報】
 店舗名: ${metrics.storeName}
 業種: ${metrics.industry}
-分析期間: ${metrics.period}
-
-【集客データ】
+期間: ${metrics.period}
 広告費: ¥${metrics.cost.toLocaleString()}
 売上: ¥${metrics.sales.toLocaleString()}
-ROAS: ${metrics.roas}倍
+ROAS: ${metrics.roas.toFixed(2)}倍
 CPA: ¥${metrics.cpa.toLocaleString()}
-LPアクセス: ${metrics.lpViews}件
-LINE登録: ${metrics.lineAdds}件（登録率${metrics.lineAddRate.toFixed(1)}%）
-問い合わせ: ${metrics.inquiries}件
-予約: ${metrics.reservations}件
-クーポン利用: ${metrics.couponUses}件
-主要集客媒体: ${metrics.topPlatform}
+LPアクセス: ${metrics.lpViews}
+LINE登録: ${metrics.lineAdds}（登録率 ${metrics.lineAddRate.toFixed(1)}%）
+問い合わせ: ${metrics.inquiries}
+予約: ${metrics.reservations}
+クーポン利用: ${metrics.couponUses}
+主要チャネル: ${metrics.topPlatform}
 
-以下のJSON形式で回答してください：
+以下のJSON形式で回答してください（日本語で）:
 {
-  "comment": "店舗オーナー向けの今日の一言コメント（2〜3文、具体的で前向きな表現）",
-  "todos": ["今日やること1", "今日やること2", "今日やること3"],
+  "comment": "オーナーへの総合コメント（2〜3文）",
   "suggestions": [
-    {
-      "type": "lp|google_ads|line|google_map|meta_ads|coupon|general",
-      "title": "改善提案のタイトル",
-      "description": "具体的な改善内容（1〜2文）",
-      "priority": "high|medium|low"
-    }
+    {"category": "LP|広告|LINE|クーポン|その他", "title": "提案タイトル", "description": "具体的な改善内容", "priority": "high|medium|low"}
   ]
 }
+JSONのみ返してください。`
 
-注意事項:
-- 専門用語は使わず、店舗オーナーが理解できる平易な日本語で書く
-- 具体的な数字を使って説明する
-- 改善提案は2〜4件にまとめる
-- 今日やることは3件にする
-`
-
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [{ role: 'user', content: prompt }],
-    response_format: { type: 'json_object' },
-    temperature: 0.7,
-  })
-
-  const result = JSON.parse(response.choices[0].message.content ?? '{}')
-  return {
-    comment: result.comment ?? '',
-    todos: result.todos ?? [],
-    suggestions: result.suggestions ?? [],
-  }
+  const result = await model.generateContent(prompt)
+  const text = result.response.text().trim()
+  const jsonMatch = text.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('Invalid AI response')
+  return JSON.parse(jsonMatch[0])
 }
 
-/** LP文章をAIで生成 */
-export async function generateLpContent(input: {
-  storeName: string
-  industry: string
-  features: string
-  targetCustomer: string
-}): Promise<{
-  catchCopy: string
-  serviceDescription: string
+/** AI分析レポートを生成（強み・弱み・改善提案・優先順位） */
+export async function generateStoreAnalysis(metrics: StoreMetricsForAI): Promise<{
   strengths: string[]
-  faq: Array<{ question: string; answer: string }>
+  weaknesses: string[]
+  suggestions: Array<{ category: string; content: string }>
+  priorities: string[]
 }> {
-  const prompt = `
-あなたは店舗集客のLPライターです。
-以下の情報をもとに、LP用のコンテンツを生成してください。
+  const prompt = `店舗データを分析し、強み・弱み・改善提案・優先アクションをJSON形式で返してください。
 
-店舗名: ${input.storeName}
-業種: ${input.industry}
-特徴・強み: ${input.features}
-ターゲット顧客: ${input.targetCustomer}
+店舗名: ${metrics.storeName} / 業種: ${metrics.industry}
+広告費: ¥${metrics.cost.toLocaleString()} / 売上: ¥${metrics.sales.toLocaleString()} / ROAS: ${metrics.roas.toFixed(2)}倍
+LPアクセス: ${metrics.lpViews} / LINE登録: ${metrics.lineAdds}（${metrics.lineAddRate.toFixed(1)}%）
+問い合わせ: ${metrics.inquiries} / 予約: ${metrics.reservations}
 
-以下のJSON形式で回答してください：
 {
-  "catchCopy": "キャッチコピー（20文字以内）",
-  "serviceDescription": "サービス説明文（100文字程度）",
-  "strengths": ["強み1", "強み2", "強み3"],
-  "faq": [
-    {"question": "よくある質問1", "answer": "回答1"},
-    {"question": "よくある質問2", "answer": "回答2"},
-    {"question": "よくある質問3", "answer": "回答3"}
-  ]
+  "strengths": ["強み1（1文）", "強み2"],
+  "weaknesses": ["改善点1（1文）", "改善点2"],
+  "suggestions": [
+    {"category": "LP|広告|LINE|クーポン", "content": "具体的提案（1文）"}
+  ],
+  "priorities": ["優先アクション1（具体的に）", "優先アクション2", "優先アクション3"]
 }
-`
+JSONのみ返してください。`
 
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [{ role: 'user', content: prompt }],
-    response_format: { type: 'json_object' },
-    temperature: 0.8,
-  })
-
-  const result = JSON.parse(response.choices[0].message.content ?? '{}')
-  return {
-    catchCopy: result.catchCopy ?? '',
-    serviceDescription: result.serviceDescription ?? '',
-    strengths: result.strengths ?? [],
-    faq: result.faq ?? [],
-  }
+  const result = await model.generateContent(prompt)
+  const text = result.response.text().trim()
+  const jsonMatch = text.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('Invalid AI response')
+  return JSON.parse(jsonMatch[0])
 }
 
-export default openai
+/** LP文章を生成 */
+export async function generateLpContent(params: {
+  store_name: string
+  industry: string
+  target: string
+  strengths: string
+}): Promise<{ catch_copy: string; service_description: string; strengths: string[] }> {
+  const prompt = `以下の店舗情報をもとに、LPのキャッチコピー・サービス説明・選ばれる理由をJSON形式で生成してください。
+
+店舗名: ${params.store_name}
+業種: ${params.industry}
+ターゲット: ${params.target}
+強み: ${params.strengths}
+
+{
+  "catch_copy": "キャッチコピー（20文字以内）",
+  "service_description": "サービス説明（80〜120文字）",
+  "strengths": ["選ばれる理由1（15文字以内）", "選ばれる理由2", "選ばれる理由3"]
+}
+JSONのみ返してください。`
+
+  const result = await model.generateContent(prompt)
+  const text = result.response.text().trim()
+  const jsonMatch = text.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('Invalid AI response')
+  return JSON.parse(jsonMatch[0])
+}
