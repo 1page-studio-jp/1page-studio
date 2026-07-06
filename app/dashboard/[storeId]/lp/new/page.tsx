@@ -1,20 +1,25 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, Sparkles, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Sparkles, Plus, Trash2, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
+import { LP_TEMPLATES, getIndustry } from '@/lib/lp-templates'
 
-export default function NewLpPage({ params }: { params: { storeId: string } }) {
+function NewLpForm({ storeId }: { storeId: string }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const templateId = searchParams.get('template')
+
   const [loading, setLoading] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
   const [error, setError] = useState('')
+  const [templateApplied, setTemplateApplied] = useState(false)
 
   const [form, setForm] = useState({
     title: '',
@@ -28,224 +33,409 @@ export default function NewLpPage({ params }: { params: { storeId: string } }) {
     line_button_url: '',
     instagram_url: '',
     google_map_embed: '',
-    coupon_display: true,
   })
 
-  // AI生成のための追加フォーム
   const [aiInput, setAiInput] = useState({
+    store_name: '',
     industry: '',
-    features: '',
-    targetCustomer: '',
+    target: '',
+    strengths: '',
   })
 
-  const set = (k: keyof typeof form, v: any) => setForm(p => ({ ...p, [k]: v }))
-  const setStrength = (i: number, v: string) => {
-    const strengths = [...form.strengths]
-    strengths[i] = v
-    set('strengths', strengths)
+  useEffect(() => {
+    if (templateId && LP_TEMPLATES[templateId]) {
+      const tpl = LP_TEMPLATES[templateId]
+      setForm(prev => ({
+        ...prev,
+        catch_copy: tpl.catch_copy,
+        service_description: tpl.sub_copy,
+        strengths: tpl.appeal_points.slice(0, 3),
+      }))
+      const ind = getIndustry(templateId)
+      if (ind) {
+        setAiInput(prev => ({ ...prev, industry: ind.label }))
+      }
+      setTemplateApplied(true)
+    }
+  }, [templateId])
+
+  const updateStrength = (index: number, value: string) => {
+    setForm(prev => {
+      const s = [...prev.strengths]
+      s[index] = value
+      return { ...prev, strengths: s }
+    })
   }
 
+  const addStrength = () =>
+    setForm(prev => ({ ...prev, strengths: [...prev.strengths, ''] }))
+
+  const removeStrength = (i: number) =>
+    setForm(prev => ({
+      ...prev,
+      strengths: prev.strengths.filter((_, idx) => idx !== i),
+    }))
+
   const handleAiGenerate = async () => {
-    if (!aiInput.features) return
     setAiLoading(true)
+    setError('')
     try {
       const res = await fetch('/api/ai/lp-content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          storeId: params.storeId,
-          ...aiInput,
+          store_name: aiInput.store_name,
+          industry: aiInput.industry,
+          target: aiInput.target,
+          strengths: aiInput.strengths,
         }),
       })
+      if (!res.ok) throw new Error('AI生成に失敗しました')
       const data = await res.json()
-      if (data.catchCopy) setForm(p => ({ ...p, catch_copy: data.catchCopy }))
-      if (data.serviceDescription) setForm(p => ({ ...p, service_description: data.serviceDescription }))
-      if (data.strengths?.length) setForm(p => ({ ...p, strengths: [...data.strengths, ''] }))
+      setForm(prev => ({
+        ...prev,
+        catch_copy: data.catch_copy || prev.catch_copy,
+        service_description: data.service_description || prev.service_description,
+        strengths: data.strengths || prev.strengths,
+      }))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'AI生成に失敗しました')
     } finally {
       setAiLoading(false)
     }
   }
 
-  const handleSubmit = async (status: 'draft' | 'published') => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setLoading(true)
     setError('')
-    const res = await fetch('/api/lp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, store_id: params.storeId, status }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      setError(data.error ?? 'エラーが発生しました')
+    try {
+      const res = await fetch('/api/lp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          store_id: storeId,
+          title: form.title,
+          catch_copy: form.catch_copy,
+          service_description: form.service_description,
+          strengths: form.strengths.filter(Boolean),
+          pricing: form.pricing,
+          access_info: form.access_info,
+          business_hours: form.business_hours,
+          phone_number: form.phone_number,
+          line_button_url: form.line_button_url,
+          instagram_url: form.instagram_url,
+          google_map_embed: form.google_map_embed,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'LP作成に失敗しました')
+      }
+      router.push(`/dashboard/${storeId}/lp`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'LP作成に失敗しました')
+    } finally {
       setLoading(false)
-      return
     }
-    router.push(`/dashboard/${params.storeId}/lp`)
   }
 
+  const industry = templateId ? getIndustry(templateId) : null
+
   return (
-    <div className="p-4 md:p-8 max-w-3xl space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href={`/dashboard/${params.storeId}/lp`}>
-          <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Link href={`/dashboard/${storeId}/lp`}>
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            戻る
+          </Button>
         </Link>
-        <div>
-          <h1 className="text-2xl font-bold">LP作成</h1>
-          <p className="text-sm text-muted-foreground">店舗の集客ページを作成します</p>
-        </div>
+        <h1 className="text-2xl font-bold">新規LP作成</h1>
       </div>
 
-      {error && <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">{error}</div>}
+      {industry && templateApplied && (
+        <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-4 py-3">
+          <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+          <span className="text-sm text-green-700">
+            <strong>{industry.emoji} {industry.label}</strong>{' '}
+            のテンプレートを適用しました。内容を確認・編集してください。
+          </span>
+        </div>
+      )}
 
-      {/* AI Assist */}
-      <Card className="border-primary/20 bg-primary/5">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <Sparkles className="h-4 w-4 text-primary" />
-            文章をAIで自動生成
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-purple-500" />
+            AIでLP文章を自動生成
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">業種</Label>
-              <Input placeholder="美容室" value={aiInput.industry} onChange={e => setAiInput(p => ({ ...p, industry: e.target.value }))} />
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>店舗名</Label>
+              <Input
+                value={aiInput.store_name}
+                onChange={e =>
+                  setAiInput(prev => ({ ...prev, store_name: e.target.value }))
+                }
+                placeholder="例: カフェ○○"
+              />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">ターゲット</Label>
-              <Input placeholder="30代女性" value={aiInput.targetCustomer} onChange={e => setAiInput(p => ({ ...p, targetCustomer: e.target.value }))} />
+            <div className="space-y-2">
+              <Label>業種</Label>
+              <Input
+                value={aiInput.industry}
+                onChange={e =>
+                  setAiInput(prev => ({ ...prev, industry: e.target.value }))
+                }
+                placeholder="例: 美容室、整体院"
+              />
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">特徴・強み（箇条書きでOK）</Label>
-            <Textarea
-              placeholder="・経験15年のスタイリスト&#10;・完全個室&#10;・駅徒歩3分"
-              className="min-h-[80px]"
-              value={aiInput.features}
-              onChange={e => setAiInput(p => ({ ...p, features: e.target.value }))}
-            />
+            <div className="space-y-2">
+              <Label>ターゲット客層</Label>
+              <Input
+                value={aiInput.target}
+                onChange={e =>
+                  setAiInput(prev => ({ ...prev, target: e.target.value }))
+                }
+                placeholder="例: 20〜40代の女性"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>強み・特徴</Label>
+              <Input
+                value={aiInput.strengths}
+                onChange={e =>
+                  setAiInput(prev => ({ ...prev, strengths: e.target.value }))
+                }
+                placeholder="例: 駅近、個室あり、実績10年"
+              />
+            </div>
           </div>
           <Button
+            type="button"
             variant="outline"
-            size="sm"
             onClick={handleAiGenerate}
-            disabled={aiLoading || !aiInput.features}
+            disabled={aiLoading || !aiInput.store_name}
           >
-            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-            {aiLoading ? 'AIが生成中...' : '文章を生成する'}
+            <Sparkles className="mr-2 h-4 w-4" />
+            {aiLoading ? 'AI生成中...' : 'AIで文章を生成'}
           </Button>
         </CardContent>
       </Card>
 
-      {/* Basic Info */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">基本情報</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>LPタイトル *</Label>
-            <Input placeholder="〇〇美容室 公式ページ" value={form.title} onChange={e => set('title', e.target.value)} />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {error && (
+          <div className="rounded-md bg-red-50 p-3 text-sm text-red-600">
+            {error}
           </div>
-          <div className="space-y-2">
-            <Label>キャッチコピー</Label>
-            <Input placeholder="あなたの美しさを引き出す、特別な時間" value={form.catch_copy} onChange={e => set('catch_copy', e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>サービス説明</Label>
-            <Textarea
-              className="min-h-[100px]"
-              placeholder="店舗・サービスの説明文"
-              value={form.service_description}
-              onChange={e => set('service_description', e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>強み・特徴</Label>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>基本情報</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="title">
+                LPタイトル <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="title"
+                required
+                value={form.title}
+                onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+                placeholder="例: ○○サロン | 初回限定キャンペーン"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="catch_copy">キャッチコピー</Label>
+              <Textarea
+                id="catch_copy"
+                value={form.catch_copy}
+                onChange={e =>
+                  setForm(p => ({ ...p, catch_copy: e.target.value }))
+                }
+                placeholder="例: あなたの美しさを引き出す、プロのケア"
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="service_description">サービス説明</Label>
+              <Textarea
+                id="service_description"
+                value={form.service_description}
+                onChange={e =>
+                  setForm(p => ({
+                    ...p,
+                    service_description: e.target.value,
+                  }))
+                }
+                placeholder="お店のサービス内容を詳しく説明してください"
+                rows={4}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>選ばれる理由</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
             {form.strengths.map((s, i) => (
               <div key={i} className="flex gap-2">
                 <Input
-                  placeholder={`強み ${i + 1}`}
                   value={s}
-                  onChange={e => setStrength(i, e.target.value)}
+                  onChange={e => updateStrength(i, e.target.value)}
+                  placeholder={`理由 ${i + 1}`}
                 />
-                {i === form.strengths.length - 1 && (
-                  <Button variant="ghost" size="icon" onClick={() => set('strengths', [...form.strengths, ''])}>
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeStrength(i)}
+                  disabled={form.strengths.length <= 1}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             ))}
-          </div>
-          <div className="space-y-2">
-            <Label>料金・メニュー</Label>
-            <Textarea
-              className="min-h-[80px]"
-              placeholder="カット ¥4,400〜&#10;カラー ¥8,800〜"
-              value={form.pricing}
-              onChange={e => set('pricing', e.target.value)}
-            />
-          </div>
-        </CardContent>
-      </Card>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addStrength}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              追加
+            </Button>
+          </CardContent>
+        </Card>
 
-      {/* Contact & Access */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">アクセス・連絡先</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>住所・アクセス</Label>
-            <Textarea placeholder="東京都渋谷区〇〇 · 渋谷駅徒歩3分" value={form.access_info} onChange={e => set('access_info', e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>店舗情報</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>営業時間</Label>
-              <Input placeholder="10:00〜20:00（火曜定休）" value={form.business_hours} onChange={e => set('business_hours', e.target.value)} />
+              <Label htmlFor="pricing">料金・プラン</Label>
+              <Textarea
+                id="pricing"
+                value={form.pricing}
+                onChange={e =>
+                  setForm(p => ({ ...p, pricing: e.target.value }))
+                }
+                placeholder="例: カット ¥3,300〜"
+                rows={3}
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="business_hours">営業時間</Label>
+                <Input
+                  id="business_hours"
+                  value={form.business_hours}
+                  onChange={e =>
+                    setForm(p => ({ ...p, business_hours: e.target.value }))
+                  }
+                  placeholder="例: 10:00〜19:00（火曜定休）"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone_number">電話番号</Label>
+                <Input
+                  id="phone_number"
+                  value={form.phone_number}
+                  onChange={e =>
+                    setForm(p => ({ ...p, phone_number: e.target.value }))
+                  }
+                  placeholder="例: 03-1234-5678"
+                />
+              </div>
             </div>
             <div className="space-y-2">
-              <Label>電話番号</Label>
-              <Input placeholder="03-0000-0000" value={form.phone_number} onChange={e => set('phone_number', e.target.value)} />
+              <Label htmlFor="access_info">アクセス</Label>
+              <Input
+                id="access_info"
+                value={form.access_info}
+                onChange={e =>
+                  setForm(p => ({ ...p, access_info: e.target.value }))
+                }
+                placeholder="例: ○○駅 徒歩3分"
+              />
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* Links */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">集客リンク</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>LINE登録URL</Label>
-            <Input placeholder="https://lin.ee/XXXXXX" value={form.line_button_url} onChange={e => set('line_button_url', e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Instagram URL</Label>
-            <Input placeholder="https://instagram.com/yourstore" value={form.instagram_url} onChange={e => set('instagram_url', e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Googleマップ 埋め込みコード</Label>
-            <Textarea placeholder={'<iframe src="https://maps.google.com/..." />'} className="min-h-[80px] font-mono text-xs" value={form.google_map_embed} onChange={e => set('google_map_embed', e.target.value)} />
-          </div>
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="coupon_display"
-              checked={form.coupon_display}
-              onChange={e => set('coupon_display', e.target.checked)}
-              className="h-4 w-4 rounded border-input"
-            />
-            <Label htmlFor="coupon_display">LINEクーポンをLPに表示する</Label>
-          </div>
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>SNS・外部リンク</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="line_button_url">LINE公式アカウントURL</Label>
+              <Input
+                id="line_button_url"
+                type="url"
+                value={form.line_button_url}
+                onChange={e =>
+                  setForm(p => ({ ...p, line_button_url: e.target.value }))
+                }
+                placeholder="https://lin.ee/xxxxxxx"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="instagram_url">Instagram URL</Label>
+              <Input
+                id="instagram_url"
+                type="url"
+                value={form.instagram_url}
+                onChange={e =>
+                  setForm(p => ({ ...p, instagram_url: e.target.value }))
+                }
+                placeholder="https://www.instagram.com/アカウント名"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="google_map_embed">Googleマップ埋め込みURL</Label>
+              <Input
+                id="google_map_embed"
+                value={form.google_map_embed}
+                onChange={e =>
+                  setForm(p => ({ ...p, google_map_embed: e.target.value }))
+                }
+                placeholder="Google マップ の「共有」→「地図を埋め込む」のURLを貼り付け"
+              />
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Actions */}
-      <div className="flex gap-3 pb-8">
-        <Button onClick={() => handleSubmit('draft')} variant="outline" disabled={loading} className="flex-1">
-          下書き保存
-        </Button>
-        <Button onClick={() => handleSubmit('published')} disabled={loading || !form.title} className="flex-1">
-          {loading ? '保存中...' : '公開する'}
-        </Button>
-      </div>
+        <div className="flex gap-3 pb-8">
+          <Button type="submit" disabled={loading}>
+            {loading ? '作成中...' : 'LPを作成'}
+          </Button>
+          <Link href={`/dashboard/${storeId}/lp`}>
+            <Button type="button" variant="outline">
+              キャンセル
+            </Button>
+          </Link>
+        </div>
+      </form>
     </div>
+  )
+}
+
+export default function NewLpPage({
+  params,
+}: {
+  params: { storeId: string }
+}) {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-500">読み込み中...</div>}>
+      <NewLpForm storeId={params.storeId} />
+    </Suspense>
   )
 }
