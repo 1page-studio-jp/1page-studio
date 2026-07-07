@@ -44,7 +44,7 @@ export default function EditLpPage() {
   async function fetchLp() {
     setLoading(true)
     const { data, error } = await supabase
-      .from('lps')
+      .from('lp_pages')
       .select('*')
       .eq('id', lpId)
       .eq('store_id', storeId)
@@ -80,7 +80,7 @@ export default function EditLpPage() {
     setSaved(false)
 
     const { error } = await supabase
-      .from('lps')
+      .from('lp_pages')
       .update({
         catch_copy: catchCopy,
         service_description: serviceDescription,
