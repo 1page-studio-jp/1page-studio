@@ -3,115 +3,152 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
+function extractJSON(text: string): any {
+  const match = text.match(/```json\n?([\s\S]*?)```/) || text.match(/\{[\s\S]*\}/)
+  const raw = match ? (match[1] || match[0]) : text
+  return JSON.parse(raw.trim())
+}
+
 export interface StoreMetricsForAI {
   storeName: string
-  industry: string
   period: string
-  cost: number
-  sales: number
-  roas: number
-  cpa: number
+  totalCost: number
+  totalSales: number
   lpViews: number
   lineAdds: number
-  lineAddRate: number
-  inquiries: number
-  reservations: number
-  couponUses: number
-  topPlatform: string
+  conversionRate: number
+  roas: number
 }
 
-/** AIコメント・改善提案を生成 */
-export async function generateAiComment(metrics: StoreMetricsForAI): Promise<{
-  comment: string
-  suggestions: Array<{ category: string; title: string; description: string; priority: 'high' | 'medium' | 'low' }>
-}> {
-  const prompt = `あなたは店舗集客の専門コンサルタントです。以下のデータを分析し、オーナーへのコメントと改善提案を生成してください。
+// AI日次コメント生成
+export async function generateAiComment(metrics: StoreMetricsForAI): Promise<string> {
+  const prompt = `
+あなたは店舗マーケティングのプロです。以下のデータを分析し、店舗オーナーへの簡潔なコメントを日本語200字以内で生成してください。
 
 店舗名: ${metrics.storeName}
-業種: ${metrics.industry}
 期間: ${metrics.period}
-広告費: ¥${metrics.cost.toLocaleString()}
-売上: ¥${metrics.sales.toLocaleString()}
-ROAS: ${metrics.roas.toFixed(2)}倍
-CPA: ¥${metrics.cpa.toLocaleString()}
-LPアクセス: ${metrics.lpViews}
-LINE登録: ${metrics.lineAdds}（登録率 ${metrics.lineAddRate.toFixed(1)}%）
-問い合わせ: ${metrics.inquiries}
-予約: ${metrics.reservations}
-クーポン利用: ${metrics.couponUses}
-主要チャネル: ${metrics.topPlatform}
+広告費: ¥${metrics.totalCost.toLocaleString()}
+売上: ¥${metrics.totalSales.toLocaleString()}
+LPビュー: ${metrics.lpViews}回
+LINE追加: ${metrics.lineAdds}件
+転換率: ${metrics.conversionRate.toFixed(1)}%
+ROAS: ${metrics.roas.toFixed(1)}x
 
-以下のJSON形式で回答してください（日本語で）:
-{
-  "comment": "オーナーへの総合コメント（2〜3文）",
-  "suggestions": [
-    {"category": "LP|広告|LINE|クーポン|その他", "title": "提案タイトル", "description": "具体的な改善内容", "priority": "high|medium|low"}
-  ]
-}
-JSONのみ返してください。`
-
+コメントのみ返してください（JSON不要）。
+`
   const result = await model.generateContent(prompt)
-  const text = result.response.text().trim()
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error('Invalid AI response')
-  return JSON.parse(jsonMatch[0])
+  return result.response.text().trim()
 }
 
-/** AI分析レポートを生成（強み・弱み・改善提案・優先順位） */
+// 店舗分析レポート生成
 export async function generateStoreAnalysis(metrics: StoreMetricsForAI): Promise<{
   strengths: string[]
   weaknesses: string[]
-  suggestions: Array<{ category: string; content: string }>
-  priorities: string[]
+  opportunities: string[]
+  recommendations: string[]
+  priority: string
 }> {
-  const prompt = `店舗データを分析し、強み・弱み・改善提案・優先アクションをJSON形式で返してください。
+  const prompt = `
+マーケティング専門家として、以下の店舗データのSWOT分析と改善提案をJSON形式で返してください。
 
-店舗名: ${metrics.storeName} / 業種: ${metrics.industry}
-広告費: ¥${metrics.cost.toLocaleString()} / 売上: ¥${metrics.sales.toLocaleString()} / ROAS: ${metrics.roas.toFixed(2)}倍
-LPアクセス: ${metrics.lpViews} / LINE登録: ${metrics.lineAdds}（${metrics.lineAddRate.toFixed(1)}%）
-問い合わせ: ${metrics.inquiries} / 予約: ${metrics.reservations}
+データ: ${JSON.stringify(metrics, null, 2)}
 
+必ず以下のJSON形式で返してください:
+\`\`\`json
 {
-  "strengths": ["強み1（1文）", "強み2"],
-  "weaknesses": ["改善点1（1文）", "改善点2"],
-  "suggestions": [
-    {"category": "LP|広告|LINE|クーポン", "content": "具体的提案（1文）"}
-  ],
-  "priorities": ["優先アクション1（具体的に）", "優先アクション2", "優先アクション3"]
+  "strengths": ["強み1", "強み2"],
+  "weaknesses": ["弱み1", "弱み2"],
+  "opportunities": ["機会1", "機会2"],
+  "recommendations": ["提案1", "提案2", "提案3"],
+  "priority": "最優先で取り組むべきことを1文で"
 }
-JSONのみ返してください。`
-
+\`\`\`
+`
   const result = await model.generateContent(prompt)
-  const text = result.response.text().trim()
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error('Invalid AI response')
-  return JSON.parse(jsonMatch[0])
+  return extractJSON(result.response.text())
 }
 
-/** LP文章を生成 */
-export async function generateLpContent(params: {
-  store_name: string
-  industry: string
-  target: string
-  strengths: string
-}): Promise<{ catch_copy: string; service_description: string; strengths: string[] }> {
-  const prompt = `以下の店舗情報をもとに、LPのキャッチコピー・サービス説明・選ばれる理由をJSON形式で生成してください。
+export interface LpGenerationParams {
+  storeName: string
+  storeCategory: string
+  area?: string
+  appeal_angle: string   // 訴求角度（例：「初回割引」「プライバシー重視」「スタイリスト実績」）
+  existing_strengths?: string[]
+  existing_services?: string[]
+  phone?: string
+  business_hours?: string
+}
 
-店舗名: ${params.store_name}
-業種: ${params.industry}
-ターゲット: ${params.target}
-強み: ${params.strengths}
+export interface GeneratedLpContent {
+  catch_copy: string
+  sub_copy: string
+  service_description: string
+  strengths: string[]
+  appeal_points: string[]
+  line_cta_text: string
+  line_benefit: string
+  seo_title: string
+  seo_description: string
+}
 
+// LP全コンテンツ生成（訴求角度→プロ品質LP）
+export async function generateLpContent(params: LpGenerationParams): Promise<GeneratedLpContent> {
+  const strengthsNote = params.existing_strengths?.length
+    ? `\n既存の強み情報: ${params.existing_strengths.join('、')}`
+    : ''
+  const servicesNote = params.existing_services?.length
+    ? `\nサービス例: ${params.existing_services.join('、')}`
+    : ''
+
+  const prompt = `
+あなたは日本のローカルビジネス向けLPコピーライターです。
+以下の訴求角度に基づいて、店舗のLPコンテンツをプロ品質で生成してください。
+
+【店舗情報】
+店舗名: ${params.storeName}
+業種: ${params.storeCategory}
+エリア: ${params.area || '未設定'}${strengthsNote}${servicesNote}
+
+【今回の訴求角度（テスト施策）】
+${params.appeal_angle}
+
+【要件】
+- キャッチコピーは訴求角度に直結させる（15文字以内）
+- サブコピーは感情に訴え、行動を促す（30文字以内）
+- サービス説明は信頼感と親近感を両立（80〜120文字）
+- 強み3点は数字・具体性を重視
+- アピールバッジ3点はキャッチーな短文（6文字以内）
+- LINEボタンテキストは行動喚起（10文字以内）
+- LINE特典は登録メリットを具体的に（20文字以内）
+- SEOタイトルはエリア+業種+訴求（30文字以内）
+- SEO説明文は検索意図に合わせた自然な文（80〜100文字）
+
+必ず以下のJSON形式で返してください:
+```json
 {
-  "catch_copy": "キャッチコピー（20文字以内）",
-  "service_description": "サービス説明（80〜120文字）",
-  "strengths": ["選ばれる理由1（15文字以内）", "選ばれる理由2", "選ばれる理由3"]
+  "catch_copy": "キャッチコピー",
+  "sub_copy": "サブコピー",
+  "service_description": "サービス説明文",
+  "strengths": ["強み1", "強み2", "強み3"],
+  "appeal_points": ["バッジ1", "バッジ2", "バッジ3"],
+  "line_cta_text": "LINEボタンテキスト",
+  "line_benefit": "LINE登録特典テキスト",
+  "seo_title": "SEOタイトル",
+  "seo_description": "SEO説明文"
 }
-JSONのみ返してください。`
-
+```
+`
   const result = await model.generateContent(prompt)
-  const text = result.response.text().trim()
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error('Invalid AI response')
-  return JSON.parse(jsonMatch[0])
+  const parsed = extractJSON(result.response.text())
+  return {
+    catch_copy: parsed.catch_copy || '',
+    sub_copy: parsed.sub_copy || '',
+    service_description: parsed.service_description || '',
+    strengths: Array.isArray(parsed.strengths) ? parsed.strengths.slice(0, 3) : [],
+    appeal_points: Array.isArray(parsed.appeal_points) ? parsed.appeal_points.slice(0, 3) : [],
+    line_cta_text: parsed.line_cta_text || 'LINEで予約する',
+    line_benefit: parsed.line_benefit || '',
+    seo_title: parsed.seo_title || '',
+    seo_description: parsed.seo_description || '',
+  }
 }
