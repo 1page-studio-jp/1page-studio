@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
@@ -9,6 +9,7 @@ interface LpPage {
   catch_copy: string | null
   status: string
   created_at: string
+  header_image_url: string | null
 }
 
 interface LpAnalytics {
@@ -36,6 +37,9 @@ export default function AdminLpListPage() {
   const [store, setStore] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [actionId, setActionId] = useState<string | null>(null)
+  const [uploadingImage, setUploadingImage] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadTargetId, setUploadTargetId] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [notified, setNotified] = useState<string | null>(null)
 
@@ -105,6 +109,23 @@ export default function AdminLpListPage() {
     window.open('mailto:' + ownerEmail + '?subject=' + subject + '&body=' + body)
   }
 
+  async function uploadImage(lpId: string, file: File) {
+    setUploadingImage(lpId)
+    const fd = new FormData()
+    fd.append('file', file)
+    try {
+      const res = await fetch('/api/admin/lp/' + lpId + '/image', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (data.url) setLps(prev => prev.map(l => l.id === lpId ? { ...l, header_image_url: data.url } : l))
+    } finally { setUploadingImage(null) }
+  }
+  async function deleteImage(lpId: string) {
+    setUploadingImage(lpId)
+    try {
+      await fetch('/api/admin/lp/' + lpId + '/image', { method: 'DELETE' })
+      setLps(prev => prev.map(l => l.id === lpId ? { ...l, header_image_url: null } : l))
+    } finally { setUploadingImage(null) }
+  }
   const published = lps.find(l => l.status === 'published')
   const slug = store?.slug || null
 
@@ -186,6 +207,13 @@ export default function AdminLpListPage() {
                       <button onClick={() => copyUrl(slug, lp.id)} style={{ background: '#F3F4F6', color: '#374151', border: 'none', padding: '6px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                         {copied === lp.id ? '✓ コピー' : '🔗 URLコピー'}
                       </button>
+                    )}
+                    <label style={{ background: '#EFF6FF', color: '#3B82F6', border: 'none', padding: '6px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-block' }}>
+                      {uploadingImage === lp.id ? '⏳' : lp.header_image_url ? '🖼️ 画像変更' : '🖼️ 画像追加'}
+                      <input type='file' accept='image/*' style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(lp.id, f) }} />
+                    </label>
+                    {lp.header_image_url && (
+                      <button onClick={() => deleteImage(lp.id)} style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', padding: '6px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>🗑️ 削除</button>
                     )}
                     {lp.status !== 'published' && (
                       <button onClick={() => changeStatus(lp, 'published')} disabled={actionId === lp.id} style={{ background: '#10B981', color: 'white', border: 'none', padding: '6px 12px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>公開する</button>
