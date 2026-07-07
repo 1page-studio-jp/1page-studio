@@ -1,74 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+function makeSupabase() {
+  const cookieStore = cookies()
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) { return cookieStore.get(name)?.value },
+        set() {},
+        remove() {}
+      }
+    }
+  )
+}
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { lpId: string } }
 ) {
-  try {
-    const formData = await request.formData()
-    const file = formData.get('file') as File
-    if (!file) return NextResponse.json({ error: 'ファイルが必要です' }, { status: 400 })
+  const supabase = makeSupabase()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // ファイルサイズチェック (5MB上限)
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: 'ファイルサイズは5MB以下にしてください' }, { status: 400 })
-    }
+  const formData = await request.formData()
+  const file = formData.get('file') as File | null
 
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const fileName = `${params.lpId}/header.${ext}`
+  if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 })
+  if (file.size > 5 * 1024 * 1024) return NextResponse.json({ error: 'File too large (max 5MB)' }, { status: 400 })
 
-    // Storage にアップロード
-    const { error: uploadError } = await supabase.storage
-      .from('lp-images')
-      .upload(fileName, file, { upsert: true, contentType: file.type })
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+  const storagePath = `${params.lpId}/header.${ext}`
 
-    if (uploadError) {
-      return NextResponse.json({ error: uploadError.message }, { status: 500 })
-    }
+  const arrayBuffer = await file.arrayBuffer()
+  const { error: uploadError } = await supabase.storage
+    .from('lp-images')
+    .upload(storagePath, arrayBuffer, { contentType: file.type, upsert: true })
 
-    // 公開URLを取得
-    const { data: { publicUrl } } = supabase.storage
-      .from('lp-images')
-      .getPublicUrl(fileName)
+  if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 })
 
-    // lp_pagesのheader_image_urlを更新
-    const { error: updateError } = await supabase
-      .from('lp_pages')
-      .update({ header_image_url: publicUrl })
-      .eq('id', params.lpId)
+  const { data: { publicUrl } } = supabase.storage.from('lp-images').getPublicUrl(storagePath)
 
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 })
-    }
+  await supabase.from('lp_pages').update({ header_image_url: publicUrl }).eq('id', params.lpId)
 
-    return NextResponse.json({ url: publicUrl })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
-  }
+  return NextResponse.json({ url: publicUrl })
 }
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { lpId: string } }
 ) {
-  try {
-    // ストレージから削除
-    const exts = ['jpg', 'jpeg', 'png', 'webp', 'gif']
-    for (const ext of exts) {
-      await supabase.storage.from('lp-images').remove([`${params.lpId}/header.${ext}`])
-    }
+  const supabase = makeSupabase()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // DBをnullに更新
-    await supabase.from('lp_pages').update({ header_image_url: null }).eq('id', params.lpId)
+  const exts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'svg']
+  await supabase.storage.from('lp-images').remove(
+    exts.map(ext => `${params.lpId}/header.${ext}`)
+  )
 
-    return NextResponse.json({ ok: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
-  }
+  await supabase.from('lp_pages').update({ header_image_url: null }).eq('id', params.lpId)
+
+  return NextResponse.json({ ok: true })
 }
