@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Plus, FileText, ExternalLink, Edit, Globe, Clock } from 'lucide-react'
+import { FileText, ExternalLink, Edit, Globe, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
@@ -29,18 +29,10 @@ export default async function LpListPage({ params }: { params: { storeId: string
               </span>
             </p>
           </div>
-          <Link href={`/dashboard/${params.storeId}/lp/new`}>
-            <button className="flex items-center gap-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium px-4 py-2.5 hover:bg-primary/90 transition-colors shadow-sm">
-              <Plus className="h-4 w-4" />
-              æ°ãã LP ãä½ã
-            </button>
-          </Link>
-          <Link href={`/dashboard/${params.storeId}/lp/templates`}>
-            <button className="flex items-center gap-2 rounded-xl border border-gray-200 text-sm font-medium px-4 py-2.5 hover:bg-gray-50 transition-colors">
-              <FileText className="h-4 w-4" />
-              テンプレートから作成
-            </button>
-          </Link>
+          <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            LP作成・デザイン変更はパートナーへ
+          </div>
         </div>
 
         {/* List */}
