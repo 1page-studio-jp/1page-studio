@@ -1,45 +1,50 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { Client } from 'pg'
 
 export async function GET() {
+  const results: Record<string, any> = {}
+
+  // 1. Supabase Storage bucket作成
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
-    
-    const results: any[] = []
-
-    // 1. header_image_urlカラムをlp_pagesに追加
-    const { error: colError } = await supabase.rpc('exec_migration', {
-      sql: 'ALTER TABLE lp_pages ADD COLUMN IF NOT EXISTS header_image_url TEXT'
-    }).maybeSingle()
-    
-    // rpc経由はできないので直接クエリで確認だけ
-    const { data: cols } = await supabase
-      .from('information_schema.columns' as any)
-      .select('column_name')
-      .eq('table_name', 'lp_pages')
-      .eq('column_name', 'header_image_url')
-    results.push({ check_column: cols })
-
-    // 2. Storageバケット作成
     const { data: buckets } = await supabase.storage.listBuckets()
     const exists = buckets?.some(b => b.id === 'lp-images')
-    
     if (!exists) {
-      const { data: bucket, error: bucketError } = await supabase.storage.createBucket('lp-images', {
+      const { error } = await supabase.storage.createBucket('lp-images', {
         public: true,
         fileSizeLimit: 5 * 1024 * 1024,
         allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
       })
-      results.push({ bucket_created: bucket, bucket_error: bucketError })
+      results.bucket = error ? { error: error.message } : 'created'
     } else {
-      results.push({ bucket: 'already exists' })
+      results.bucket = 'already_exists'
     }
-
-    return NextResponse.json({ success: true, results })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    results.bucket_error = e.message
   }
+
+  // 2. pg経由でDDL実行
+  const client = new Client({
+    host: 'aws-0-ap-northeast-1.pooler.supabase.com',
+    port: 6543,
+    database: 'postgres',
+    user: 'postgres.iqovsiadmkayldltvfxc',
+    password: process.env.SUPABASE_DB_PASSWORD || '1PageStudio2024!DB#secure',
+    ssl: { rejectUnauthorized: false }
+  })
+  try {
+    await client.connect()
+    await client.query('ALTER TABLE lp_pages ADD COLUMN IF NOT EXISTS header_image_url TEXT')
+    results.column = 'added'
+    await client.end()
+  } catch (e: any) {
+    results.column_error = e.message
+    try { await client.end() } catch {}
+  }
+
+  return NextResponse.json({ ok: true, results })
 }
