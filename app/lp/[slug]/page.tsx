@@ -1,423 +1,276 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { Phone, MapPin, Clock, Instagram, MessageCircle, Tag, CheckCircle } from 'lucide-react'
 import type { Metadata } from 'next'
 
 interface Props { params: { slug: string } }
 
-// hex → rgba（opacity付き）
-function hexToRgba(hex: string, alpha: number) {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r},${g},${b},${alpha})`
-}
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const supabase = createClient()
-  const { data: store } = await supabase
-    .from('stores').select('store_name, industry').eq('slug', params.slug).single()
+  const { data: store } = await supabase.from('stores').select('store_name, industry').eq('slug', params.slug).single()
   if (!store) return { title: 'ページが見つかりません' }
-
-  const { data: lp } = await supabase
-    .from('lp_pages').select('seo_title, seo_description, catch_copy')
-    .eq('store_id', (await supabase.from('stores').select('id').eq('slug', params.slug).single()).data?.id ?? '')
-    .eq('status', 'published').limit(1).single()
-
+  const { data: lp } = await supabase.from('lp_pages').select('seo_title, seo_description, catch_copy').eq('store_id', (await supabase.from('stores').select('id').eq('slug', params.slug).single()).data?.id || '').eq('status', 'published').single()
   return {
     title: lp?.seo_title || store.store_name,
-    description: lp?.seo_description || lp?.catch_copy || `${store.store_name}の公式ページ`,
+    description: lp?.seo_description || lp?.catch_copy || store.store_name,
   }
 }
 
-export default async function PublicLpPage({ params }: Props) {
+export default async function LpPublicPage({ params }: Props) {
   const supabase = createClient()
 
-  const { data: store } = await supabase
-    .from('stores').select('*').eq('slug', params.slug).single()
+  const { data: store } = await supabase.from('stores').select('*').eq('slug', params.slug).single()
   if (!store) notFound()
 
   const { data: lp } = await supabase
-    .from('lp_pages').select('*')
+    .from('lp_pages')
+    .select('*')
     .eq('store_id', store.id)
     .eq('status', 'published')
-    .order('created_at', { ascending: false })
-    .limit(1).single()
+    .is('deleted_at', null)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .single()
+
   if (!lp) notFound()
 
-  const { data: coupons } = lp.coupon_display
-    ? await supabase.from('coupons').select('*').eq('store_id', store.id).eq('display_status', 'visible')
-    : { data: [] }
-
-  // フィールドの正規化（新旧両対応）
-  const primaryColor = lp.primary_color || '#6366f1'
-  const catchCopy    = lp.catch_copy || store.store_name
-  const subCopy      = lp.sub_copy || null
-  const lineBenefit  = lp.line_benefit || null
-  const ctaText      = lp.line_cta_text || 'LINEで友だち追加する'
-  const mainCtaText  = lp.cta_text || 'LINEで今すぐ予約・相談する'
-
-  // 選ばれる理由: appeal_points 優先、なければ strengths
-  const appealPoints: string[] = (lp.appeal_points && lp.appeal_points.length > 0)
-    ? lp.appeal_points
-    : (lp.strengths ?? [])
-
-  // サービス（構造化）
-  const services: { name: string; description: string; price?: string; tag?: string }[] =
-    lp.services ?? []
-
-  // 特徴
-  const features: string[] = lp.features ?? []
-
-  const testimonials: any[] = lp.testimonials ?? []
-  const faq: any[]          = lp.faq ?? []
-
-  const primaryLight = hexToRgba(primaryColor, 0.08)
-  const primaryMid   = hexToRgba(primaryColor, 0.15)
+  const primary = lp.primary_color || '#7C3AED'
+  const accent = lp.accent_color || '#EC4899'
+  const strengths: string[] = Array.isArray(lp.strengths) ? lp.strengths : []
+  const appealPoints: string[] = Array.isArray(lp.appeal_points) ? lp.appeal_points : []
+  const services: any[] = Array.isArray(lp.services) ? lp.services : []
+  const testimonials: any[] = Array.isArray(lp.testimonials) ? lp.testimonials : []
+  const faq: any[] = Array.isArray(lp.faq) ? lp.faq : []
 
   return (
-    <div className="min-h-screen bg-white" style={{ '--primary': primaryColor } as React.CSSProperties}>
+    <div style={{ fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif", background: '#FAFAFA', minHeight: '100vh' }}>
+      <style>{`
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        .line-btn {
+          display: flex; align-items: center; justify-content: center; gap: 10px;
+          background: #06C755; color: white; font-size: 17px; font-weight: 700;
+          padding: 18px 24px; border-radius: 50px; text-decoration: none;
+          box-shadow: 0 4px 20px rgba(6,199,85,0.4); transition: transform 0.1s, box-shadow 0.1s;
+          width: 100%; max-width: 380px; margin: 0 auto; letter-spacing: 0.02em;
+        }
+        .line-btn:active { transform: scale(0.97); }
+        .phone-btn {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          border: 2px solid; font-size: 16px; font-weight: 700;
+          padding: 14px 24px; border-radius: 50px; text-decoration: none;
+          width: 100%; max-width: 380px; margin: 0 auto;
+        }
+        .section { padding: 48px 20px; }
+        .section-title { font-size: 20px; font-weight: 800; text-align: center; margin-bottom: 8px; }
+        .section-sub { font-size: 13px; color: #888; text-align: center; margin-bottom: 28px; }
+        .card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+        .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; margin-bottom: 8px; }
+        @media (min-width: 640px) {
+          .section { padding: 64px 40px; }
+          .inner { max-width: 600px; margin: 0 auto; }
+        }
+      `}</style>
 
-      {/* ===== HERO ===== */}
-      <section
-        className="relative overflow-hidden"
-        style={{ background: `linear-gradient(135deg, ${primaryColor} 0%, ${hexToRgba(primaryColor, 0.8)} 100%)` }}
-      >
-        {lp.main_image_url && (
-          <>
-            <img src={lp.main_image_url} alt={store.store_name} className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-30" />
-            <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${primaryColor}dd 0%, ${primaryColor}99 100%)` }} />
-          </>
-        )}
-        <div className="relative max-w-xl mx-auto px-5 pt-12 pb-10 text-white text-center">
-          <p className="text-sm font-semibold tracking-widest uppercase opacity-70 mb-3">{store.store_name}</p>
-          <h1 className="text-3xl md:text-4xl font-black leading-tight tracking-tight mb-4">
-            {catchCopy}
-          </h1>
-          {subCopy && (
-            <p className="text-base opacity-90 leading-relaxed mb-6">{subCopy}</p>
-          )}
-
-          {/* LINE特典バッジ */}
-          {lineBenefit && (
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 px-4 py-2 text-sm font-medium mb-6">
-              🎁 {lineBenefit}
-            </div>
-          )}
-
-          {/* メインCTAボタン */}
-          {lp.line_button_url && (
-            <a
-              href={lp.line_button_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2.5 w-full max-w-sm mx-auto rounded-2xl bg-white py-4 font-bold text-base shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
-              style={{ color: primaryColor }}
-            >
-              <MessageCircle className="h-5 w-5" />
-              {mainCtaText}
-            </a>
-          )}
+      {/* ヒーロー */}
+      <div style={{ background: `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)`, color: 'white', padding: '56px 24px 48px', textAlign: 'center' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, opacity: 0.85, marginBottom: 16, letterSpacing: '0.08em' }}>
+          {store.store_name}
         </div>
-      </section>
-
-      {/* ===== STICKY LINE CTA ===== */}
-      {lp.line_button_url && (
-        <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm shadow-sm border-b">
-          <div className="max-w-xl mx-auto px-4 py-2.5">
-            <a
-              href={lp.line_button_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full rounded-xl py-3 text-white font-bold text-sm transition-all hover:opacity-90 active:scale-[.98]"
-              style={{ backgroundColor: '#06C755' }}
-            >
-              <MessageCircle className="h-4 w-4" />
-              {ctaText}
-              {lineBenefit && <span className="text-xs opacity-80 font-normal">— {lineBenefit}</span>}
+        <h1 style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.35, marginBottom: 16, letterSpacing: '-0.01em' }}>
+          {lp.catch_copy || store.store_name}
+        </h1>
+        {lp.sub_copy && (
+          <p style={{ fontSize: 15, opacity: 0.9, marginBottom: 32, lineHeight: 1.6 }}>{lp.sub_copy}</p>
+        )}
+        {appealPoints.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 32 }}>
+            {appealPoints.map((p, i) => (
+              <span key={i} style={{ background: 'rgba(255,255,255,0.22)', backdropFilter: 'blur(4px)', borderRadius: 20, padding: '6px 14px', fontSize: 13, fontWeight: 600 }}>
+                ✓ {p}
+              </span>
+            ))}
+          </div>
+        )}
+        {lp.line_button_url ? (
+          <div>
+            <a href={lp.line_button_url} target="_blank" rel="noopener noreferrer" className="line-btn">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
+              {lp.line_cta_text || 'LINEで予約・お問い合わせ'}
             </a>
+            {lp.line_benefit && (
+              <p style={{ fontSize: 13, marginTop: 12, opacity: 0.9, textAlign: 'center' }}>🎁 {lp.line_benefit}</p>
+            )}
+          </div>
+        ) : lp.phone_number ? (
+          <a href={`tel:${lp.phone_number}`} className="phone-btn" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.6)', maxWidth: 320, margin: '0 auto', display: 'flex' }}>
+            📞 {lp.phone_number}
+          </a>
+        ) : null}
+      </div>
+
+      {/* クーポンバナー */}
+      {lp.coupon_display && (
+        <div style={{ background: '#FFF7ED', borderTop: '3px solid #F97316', borderBottom: '3px solid #F97316', padding: '20px 24px', textAlign: 'center' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#EA580C', letterSpacing: '0.1em', marginBottom: 6 }}>🎫 期間限定クーポン</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#9A3412', lineHeight: 1.5, whiteSpace: 'pre-line' }}>{lp.coupon_display}</div>
+        </div>
+      )}
+
+      {/* サービス説明 */}
+      {lp.service_description && (
+        <div className="section" style={{ background: 'white' }}>
+          <div className="inner">
+            <div className="section-title" style={{ color: primary }}>サービス紹介</div>
+            <div className="section-sub">About Us</div>
+            <p style={{ fontSize: 15, lineHeight: 1.85, color: '#374151', textAlign: 'center' }}>{lp.service_description}</p>
           </div>
         </div>
       )}
 
-      <div className="max-w-xl mx-auto px-4 pb-16 space-y-10 mt-8">
-
-        {/* ===== LINE特典 + クーポン ===== */}
-        {(lineBenefit || (coupons && coupons.length > 0)) && (
-          <section>
-            {lineBenefit && (
-              <div
-                className="rounded-2xl border-2 p-5 mb-4"
-                style={{ borderColor: primaryColor, backgroundColor: primaryLight }}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <Tag className="h-5 w-5" style={{ color: primaryColor }} />
-                  <p className="font-bold text-sm" style={{ color: primaryColor }}>LINE登録特典</p>
+      {/* 選ばれる理由 */}
+      {strengths.length > 0 && (
+        <div className="section" style={{ background: '#F9FAFB' }}>
+          <div className="inner">
+            <div className="section-title">選ばれる理由</div>
+            <div className="section-sub">Why Choose Us</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {strengths.map((s, i) => (
+                <div key={i} className="card" style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: `linear-gradient(135deg, ${primary}, ${accent})`, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, flexShrink: 0 }}>
+                    {i + 1}
+                  </div>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: '#1F2937', paddingTop: 6, lineHeight: 1.5 }}>{s}</p>
                 </div>
-                <p className="text-gray-800 font-semibold text-base">🎁 {lineBenefit}</p>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* サービスメニュー */}
+      {services.length > 0 && (
+        <div className="section" style={{ background: 'white' }}>
+          <div className="inner">
+            <div className="section-title">メニュー</div>
+            <div className="section-sub">Menu</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {services.map((s: any, i: number) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 4px', borderBottom: '1px solid #F3F4F6' }}>
+                  <span style={{ fontSize: 15, color: '#374151' }}>{s.name || s}</span>
+                  {s.price && <span style={{ fontSize: 15, fontWeight: 700, color: primary }}>¥{Number(s.price).toLocaleString()}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* お客様の声 */}
+      {testimonials.length > 0 && (
+        <div className="section" style={{ background: '#F9FAFB' }}>
+          <div className="inner">
+            <div className="section-title">お客様の声</div>
+            <div className="section-sub">Reviews</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {testimonials.map((t: any, i: number) => (
+                <div key={i} className="card">
+                  <div style={{ color: '#FBBF24', marginBottom: 8, fontSize: 16 }}>★★★★★</div>
+                  <p style={{ fontSize: 14, color: '#374151', lineHeight: 1.7, marginBottom: 10 }}>{t.content || t}</p>
+                  {t.name && <p style={{ fontSize: 13, color: '#6B7280', fontWeight: 600 }}>— {t.name}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* よくある質問 */}
+      {faq.length > 0 && (
+        <div className="section" style={{ background: 'white' }}>
+          <div className="inner">
+            <div className="section-title">よくある質問</div>
+            <div className="section-sub">FAQ</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {faq.map((f: any, i: number) => (
+                <div key={i} className="card">
+                  <p style={{ fontSize: 15, fontWeight: 700, color: primary, marginBottom: 8 }}>Q. {f.q || f.question}</p>
+                  <p style={{ fontSize: 14, color: '#374151', lineHeight: 1.7 }}>A. {f.a || f.answer}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 店舗情報 */}
+      <div className="section" style={{ background: '#F9FAFB' }}>
+        <div className="inner">
+          <div className="section-title">店舗情報</div>
+          <div className="section-sub">Shop Info</div>
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {lp.business_hours && (
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 20 }}>🕐</span>
+                <div>
+                  <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 2 }}>営業時間</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: '#1F2937' }}>{lp.business_hours}</div>
+                </div>
               </div>
             )}
-
-            {coupons && coupons.length > 0 && (
-              <div className="space-y-3">
-                {coupons.map(c => (
-                  <div key={c.id} className="rounded-2xl border-2 border-dashed border-amber-400 bg-amber-50 p-4">
-                    <p className="font-bold text-amber-800 text-base">{c.coupon_name}</p>
-                    <p className="text-amber-700 text-sm mt-1">{c.discount_description}</p>
-                    {c.usage_conditions && <p className="text-xs text-amber-600 mt-1">{c.usage_conditions}</p>}
-                    {c.expiry_date && <p className="text-xs text-amber-600 mt-1">有効期限：{c.expiry_date}</p>}
-                  </div>
-                ))}
+            {lp.phone_number && (
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 20 }}>📞</span>
+                <div>
+                  <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 2 }}>電話番号</div>
+                  <a href={`tel:${lp.phone_number}`} style={{ fontSize: 15, fontWeight: 600, color: primary, textDecoration: 'none' }}>{lp.phone_number}</a>
+                </div>
               </div>
             )}
-
-            {lp.line_button_url && (
-              <a
-                href={lp.line_button_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 flex items-center justify-center gap-2 w-full rounded-xl bg-[#06C755] py-3.5 text-white font-bold hover:bg-[#05b34c] transition-colors"
-              >
-                <MessageCircle className="h-5 w-5" />
-                LINEで特典を受け取る
-              </a>
-            )}
-          </section>
-        )}
-
-        {/* ===== 選ばれる理由 ===== */}
-        {appealPoints.filter(Boolean).length > 0 && (
-          <section>
-            <h2 className="text-xl font-black text-center mb-1">選ばれる理由</h2>
-            <p className="text-sm text-gray-500 text-center mb-5">{store.store_name}が支持される3つのポイント</p>
-            <div className="space-y-3">
-              {appealPoints.filter(Boolean).map((point, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-4 rounded-2xl p-5"
-                  style={{ backgroundColor: primaryLight }}
-                >
-                  <div
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white font-black text-sm"
-                    style={{ backgroundColor: primaryColor }}
-                  >
-                    0{i + 1}
-                  </div>
-                  <p className="text-sm font-semibold text-gray-800 leading-snug mt-1.5">{point}</p>
+            {lp.access_info && (
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 20 }}>📍</span>
+                <div>
+                  <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 2 }}>アクセス</div>
+                  <div style={{ fontSize: 15, color: '#1F2937', lineHeight: 1.6 }}>{lp.access_info}</div>
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ===== サービス・メニュー ===== */}
-        {services.length > 0 && (
-          <section>
-            <h2 className="text-xl font-black mb-1">メニュー・料金</h2>
-            <p className="text-sm text-gray-500 mb-5">すべて税込価格です</p>
-            <div className="grid gap-3">
-              {services.map((s, i) => (
-                <div key={i} className="rounded-2xl border bg-white shadow-sm p-4 flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-bold text-sm">{s.name}</p>
-                      {s.tag && (
-                        <span
-                          className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white shrink-0"
-                          style={{ backgroundColor: primaryColor }}
-                        >
-                          {s.tag}
-                        </span>
-                      )}
-                    </div>
-                    {s.description && (
-                      <p className="text-xs text-gray-500 leading-relaxed">{s.description}</p>
-                    )}
-                  </div>
-                  {s.price && (
-                    <p className="font-bold text-sm shrink-0" style={{ color: primaryColor }}>
-                      {s.price}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-            {lp.pricing && (
-              <div className="mt-3 rounded-2xl bg-gray-50 p-4">
-                <pre className="text-sm text-gray-700 font-sans whitespace-pre-wrap">{lp.pricing}</pre>
               </div>
             )}
-          </section>
-        )}
-
-        {/* pricing のみある場合（servicesなし） */}
-        {services.length === 0 && lp.pricing && (
-          <section>
-            <h2 className="text-xl font-black mb-5">料金・メニュー</h2>
-            <div className="rounded-2xl bg-gray-50 p-5">
-              <pre className="text-sm text-gray-700 font-sans whitespace-pre-wrap">{lp.pricing}</pre>
-            </div>
-          </section>
-        )}
-
-        {/* ===== 特徴 ===== */}
-        {features.filter(Boolean).length > 0 && (
-          <section>
-            <h2 className="text-xl font-black mb-5">こだわり・特徴</h2>
-            <div className="grid grid-cols-1 gap-2">
-              {features.filter(Boolean).map((f, i) => (
-                <div key={i} className="flex items-center gap-3 rounded-xl bg-gray-50 px-4 py-3">
-                  <CheckCircle className="h-4 w-4 shrink-0" style={{ color: primaryColor }} />
-                  <p className="text-sm font-medium text-gray-800">{f}</p>
+            {lp.instagram_url && (
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <span style={{ fontSize: 20 }}>📸</span>
+                <div>
+                  <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 2 }}>Instagram</div>
+                  <a href={lp.instagram_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 14, color: primary }}>インスタをフォローする</a>
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ===== サービス説明 ===== */}
-        {lp.service_description && (
-          <section>
-            <h2 className="text-xl font-black mb-5">サービスについて</h2>
-            <p className="text-gray-700 leading-relaxed whitespace-pre-wrap text-sm">{lp.service_description}</p>
-          </section>
-        )}
-
-        {/* ===== お客様の声 ===== */}
-        {testimonials.length > 0 && (
-          <section>
-            <h2 className="text-xl font-black mb-5">お客様の声</h2>
-            <div className="space-y-3">
-              {testimonials.map((t, i) => (
-                <div key={i} className="rounded-2xl border bg-white p-5 shadow-sm">
-                  <div className="flex items-center gap-0.5 mb-2">
-                    {[...Array(5)].map((_, j) => (
-                      <span key={j} className={j < (t.rating ?? 5) ? 'text-amber-400 text-lg' : 'text-gray-200 text-lg'}>★</span>
-                    ))}
-                  </div>
-                  <p className="text-sm text-gray-700 leading-relaxed">"{t.content}"</p>
-                  <p className="text-xs text-gray-400 mt-3">{t.name}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ===== よくある質問 ===== */}
-        {faq.length > 0 && (
-          <section>
-            <h2 className="text-xl font-black mb-5">よくある質問</h2>
-            <div className="space-y-2">
-              {faq.map((item, i) => (
-                <details key={i} className="rounded-2xl border overflow-hidden group">
-                  <summary className="cursor-pointer px-5 py-4 font-semibold text-sm select-none flex items-center justify-between list-none">
-                    Q. {item.question}
-                    <span className="text-gray-400 group-open:rotate-180 transition-transform shrink-0">▼</span>
-                  </summary>
-                  <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed border-t bg-gray-50 pt-3">
-                    A. {item.answer}
-                  </div>
-                </details>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ===== アクセス ===== */}
-        {(lp.access_info || lp.business_hours || lp.phone_number || store.phone_number || store.address) && (
-          <section>
-            <h2 className="text-xl font-black mb-5">アクセス・店舗情報</h2>
-            <div className="rounded-2xl border divide-y overflow-hidden">
-              {(lp.access_info || store.address) && (
-                <div className="flex items-start gap-3 p-4">
-                  <MapPin className="h-4 w-4 mt-0.5 shrink-0 text-gray-500" />
-                  <p className="text-sm text-gray-700">{lp.access_info || store.address}</p>
-                </div>
-              )}
-              {(lp.business_hours || store.business_hours) && (
-                <div className="flex items-start gap-3 p-4">
-                  <Clock className="h-4 w-4 mt-0.5 shrink-0 text-gray-500" />
-                  <p className="text-sm text-gray-700 whitespace-pre-line">{lp.business_hours || store.business_hours}</p>
-                </div>
-              )}
-              {(lp.phone_number || store.phone_number) && (
-                <div className="flex items-center gap-3 p-4">
-                  <Phone className="h-4 w-4 shrink-0 text-gray-500" />
-                  <a href={`tel:${lp.phone_number || store.phone_number}`} className="text-sm font-semibold hover:underline" style={{ color: primaryColor }}>
-                    {lp.phone_number || store.phone_number}
-                  </a>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* ===== Googleマップ ===== */}
-        {lp.google_map_embed && (
-          <section>
-            <h2 className="text-xl font-black mb-4">地図</h2>
-            <div
-              className="rounded-2xl overflow-hidden w-full aspect-video shadow-sm"
-              dangerouslySetInnerHTML={{
-                __html: lp.google_map_embed
-                  .replace(/width="[^"]*"/, 'width="100%"')
-                  .replace(/height="[^"]*"/, 'height="100%"')
-              }}
-            />
-          </section>
-        )}
-
-        {/* ===== SNS ===== */}
-        {lp.instagram_url && (
-          <section>
-            <a
-              href={lp.instagram_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full rounded-2xl border py-3.5 text-sm font-semibold hover:bg-gray-50 transition-colors text-gray-700"
-            >
-              <Instagram className="h-4 w-4" />
-              Instagramをフォローする
-            </a>
-          </section>
-        )}
-
-        {/* ===== 最終CTA ===== */}
-        <section className="pt-4 space-y-3">
-          {lp.line_button_url && (
-            <a
-              href={lp.line_button_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2.5 w-full rounded-2xl py-5 text-white font-bold text-base shadow-lg hover:opacity-90 hover:-translate-y-0.5 transition-all active:scale-[.98]"
-              style={{ backgroundColor: '#06C755' }}
-            >
-              <MessageCircle className="h-5 w-5" />
-              {mainCtaText}
-            </a>
+              </div>
+            )}
+          </div>
+          {lp.google_map_embed && (
+            <div style={{ marginTop: 16, borderRadius: 12, overflow: 'hidden' }} dangerouslySetInnerHTML={{ __html: lp.google_map_embed }} />
           )}
-          {(lp.phone_number || store.phone_number) && (
-            <a
-              href={`tel:${lp.phone_number || store.phone_number}`}
-              className="flex items-center justify-center gap-2 w-full rounded-2xl border-2 py-4 font-bold text-base hover:bg-gray-50 transition-colors"
-              style={{ borderColor: primaryColor, color: primaryColor }}
-            >
-              <Phone className="h-5 w-5" />
-              電話で問い合わせる
-            </a>
-          )}
-          {lineBenefit && (
-            <p className="text-xs text-center text-gray-400">🎁 LINE登録で {lineBenefit}</p>
-          )}
-        </section>
+        </div>
       </div>
 
-      {/* ===== Footer ===== */}
-      <footer className="border-t py-8 text-center text-xs text-gray-400 bg-gray-50">
-        <p className="font-semibold text-gray-600">{store.store_name}</p>
-        {store.address && <p className="mt-1">{store.address}</p>}
-        <p className="mt-3 text-gray-300">Powered by 1Page Studio</p>
-      </footer>
+      {/* 最終CTA */}
+      <div style={{ background: `linear-gradient(135deg, ${primary}, ${accent})`, padding: '48px 24px', textAlign: 'center' }}>
+        <h2 style={{ fontSize: 22, fontWeight: 900, color: 'white', marginBottom: 8 }}>まずはお気軽にご相談を</h2>
+        <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', marginBottom: 28 }}>予約・お問い合わせは無料です</p>
+        {lp.line_button_url ? (
+          <a href={lp.line_button_url} target="_blank" rel="noopener noreferrer" className="line-btn">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
+            {lp.line_cta_text || 'LINEで予約する'}
+          </a>
+        ) : lp.phone_number ? (
+          <a href={`tel:${lp.phone_number}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'white', color: primary, padding: '16px 32px', borderRadius: 50, fontWeight: 800, fontSize: 17, textDecoration: 'none' }}>
+            📞 {lp.phone_number}
+          </a>
+        ) : null}
+      </div>
+
+      {/* フッター */}
+      <div style={{ background: '#111', color: '#888', padding: '20px 24px', textAlign: 'center', fontSize: 12 }}>
+        <div style={{ marginBottom: 4 }}>{store.store_name}</div>
+        <div>Powered by <span style={{ color: '#A78BFA' }}>1Page Studio</span></div>
+      </div>
     </div>
   )
 }
