@@ -1,19 +1,44 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { generateLpContent } from '@/lib/openai'
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { store_name, industry, target, strengths } = body
+    const {
+      storeName,
+      storeCategory,
+      area,
+      appeal_angle,
+      existing_strengths,
+      existing_services,
+      phone,
+      business_hours,
+    } = body
 
-    if (!store_name || !industry || !target || !strengths) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    if (!storeName || !storeCategory || !appeal_angle) {
+      return NextResponse.json(
+        { error: 'storeName, storeCategory, appeal_angle は必須です' },
+        { status: 400 }
+      )
     }
 
-    const content = await generateLpContent({ store_name, industry, target, strengths })
-    return NextResponse.json(content)
+    const result = await generateLpContent({
+      storeName,
+      storeCategory,
+      area,
+      appeal_angle,
+      existing_strengths,
+      existing_services,
+      phone,
+      business_hours,
+    })
+
+    return NextResponse.json(result)
   } catch (error) {
     console.error('LP content generation error:', error)
-    return NextResponse.json({ error: 'AI generation failed' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'LP生成中にエラーが発生しました' },
+      { status: 500 }
+    )
   }
 }
