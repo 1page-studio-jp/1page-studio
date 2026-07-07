@@ -38,6 +38,8 @@ export default function AdminLpListPage() {
   const [loading, setLoading] = useState(true)
   const [actionId, setActionId] = useState<string | null>(null)
   const [uploadingImage, setUploadingImage] = useState<string | null>(null)
+  const [winnerAnalysis, setWinnerAnalysis] = useState<any>(null)
+  const [analyzingWinner, setAnalyzingWinner] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadTargetId, setUploadTargetId] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
@@ -126,6 +128,15 @@ export default function AdminLpListPage() {
       setLps(prev => prev.map(l => l.id === lpId ? { ...l, header_image_url: null } : l))
     } finally { setUploadingImage(null) }
   }
+  async function analyzeWinner() {
+    setAnalyzingWinner(true)
+    setWinnerAnalysis(null)
+    try {
+      const res = await fetch('/api/admin/stores/' + storeId + '/lp-winner')
+      const data = await res.json()
+      if (data.analysis) setWinnerAnalysis(data.analysis)
+    } finally { setAnalyzingWinner(false) }
+  }
   const published = lps.find(l => l.status === 'published')
   const slug = store?.slug || null
 
@@ -137,6 +148,15 @@ export default function AdminLpListPage() {
           <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1F2937' }}>LP管理</h1>
           <p style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>訴求角度を変えてテスト。月3本が目安。</p>
         </div>
+        {lps.length >= 2 && (
+          <button onClick={analyzeWinner} disabled={analyzingWinner} style={{
+            background: '#F0FDF4', color: '#16A34A', border: '1px solid #BBF7D0',
+            padding: '10px 16px', borderRadius: 10, fontWeight: 700, fontSize: 13,
+            cursor: 'pointer', marginRight: 8
+          }}>
+            {analyzingWinner ? '⏳ AI分析中...' : '🏆 AI勝者判定'}
+          </button>
+        )}
         <Link href={'/admin/stores/' + storeId + '/lp/new'} style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           background: 'linear-gradient(135deg,#7C3AED,#EC4899)', color: 'white',
