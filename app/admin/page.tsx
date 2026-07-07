@@ -8,10 +8,36 @@ import { formatCurrency, formatNumber } from '@/lib/utils'
 export default async function AdminDashboard() {
   const supabase = createClient()
 
+  const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
   const [{ data: stores }, { count: userCount }] = await Promise.all([
     supabase.from('stores').select('*, subscriptions(plan_name, status)').is('deleted_at', null).order('created_at', { ascending: false }),
     supabase.from('profiles').select('*', { count: 'exact', head: true }).neq('role', 'admin'),
   ])
+
+  // LP停滞アラート: 各店舗の最新LP作成日を確認
+  const storeIds = stores?.map(s => s.id) || []
+  const lpAlerts: Array<{ storeId: string, storeName: string, slug: string, days: number | null }> = []
+  if (storeIds.length > 0) {
+    const { data: latestLps } = await supabase
+      .from('lp_pages')
+      .select('store_id, created_at')
+      .in('store_id', storeIds)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+    
+    for (const store of (stores || [])) {
+      if (store.status !== 'active') continue
+      const storeLps = latestLps?.filter(l => l.store_id === store.id) || []
+      if (storeLps.length === 0) {
+        lpAlerts.push({ storeId: store.id, storeName: store.store_name, slug: store.slug, days: null })
+      } else {
+        const latest = storeLps[0]
+        const days = Math.floor((Date.now() - new Date(latest.created_at).getTime()) / (24 * 60 * 60 * 1000))
+        if (days >= 14) lpAlerts.push({ storeId: store.id, storeName: store.store_name, slug: store.slug, days })
+      }
+    }
+    lpAlerts.sort((a, b) => (b.days || 999) - (a.days || 999))
+  }
 
   const activeStores = stores?.filter(s => s.status === 'active').length ?? 0
   const trialStores = stores?.filter(s => s.status === 'trial').length ?? 0
@@ -146,6 +172,38 @@ export default async function AdminDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {/* LP停滞アラート */}
+      {lpAlerts.length > 0 && (
+        <Card className='border-orange-200 bg-orange-50'>
+          <CardHeader>
+            <CardTitle className='text-base font-semibold text-orange-800 flex items-center gap-2'>
+              <AlertCircle className='h-4 w-4' /> LP更新アラート ({lpAlerts.length}件)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className='text-sm text-orange-600 mb-3'>以下の店舗は2週間以上LPが更新されていません。</p>
+            <div className='space-y-2'>
+              {lpAlerts.map(alert => (
+                <div key={alert.storeId} className='flex items-center justify-between bg-white rounded-lg px-4 py-2 border border-orange-100'>
+                  <div>
+                    <span className='text-sm font-medium text-gray-800'>{alert.storeName}</span>
+                    <span className='ml-2 text-xs text-orange-500'>
+                      {alert.days === null ? 'LP未作成' : `${alert.days}日更新なし`}
+                    </span>
+                  </div>
+                  <Link
+                    href={`/admin/stores/${alert.storeId}/lp/new`}
+                    className='text-xs font-semibold text-purple-600 hover:text-purple-800 bg-purple-50 px-3 py-1 rounded-full'
+                  >
+                    LP作成 →
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
