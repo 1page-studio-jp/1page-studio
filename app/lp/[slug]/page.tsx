@@ -48,6 +48,16 @@ export default async function LpPublicPage({ params }: Props) {
         @media(min-width:640px){.section{padding:64px 40px}}
       `}</style>
 
+      {/* Header Image */}
+      {lp.header_image_url && (
+        <div style={{width:'100%',maxHeight:400,overflow:'hidden',lineHeight:0}}>
+          <img
+            src={lp.header_image_url}
+            alt={lp.catch_copy || store.store_name}
+            style={{width:'100%',height:'100%',maxHeight:400,objectFit:'cover'}}
+          />
+        </div>
+      )}
       {/* Hero */}
       <div style={{background:`linear-gradient(135deg,${primary} 0%,${accent} 100%)`,color:'white',padding:'60px 24px 52px',textAlign:'center'}}>
         <p style={{fontSize:12,fontWeight:600,opacity:.75,marginBottom:14,letterSpacing:'.1em',textTransform:'uppercase'}}>{store.store_name}</p>
