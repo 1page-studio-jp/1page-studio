@@ -22,54 +22,26 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { pathname } = request.nextUrl
 
-  // LP公開ページ・APIは認証不要
-  if (pathname.startsWith('/lp/') || pathname.startsWith('/api/public/')) {
+  const pathname = request.nextUrl.pathname
+
+  // 公開ルート（認証不要）
+  const publicRoutes = ['/login', '/lp', '/api']
+  if (publicRoutes.some(r => pathname.startsWith(r)) || pathname === '/') {
     return supabaseResponse
   }
 
-  // 未認証ユーザーはログインへ
-  if (!user && pathname !== '/login') {
+  // 未認証 → ログインページへ
+  if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // 認証済みでログインページにアクセスしたらリダイレクト
-  if (user && pathname === '/login') {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
+  // user_metadata と app_metadata の両方でroleを確認
+  const role = user.app_metadata?.role || user.user_metadata?.role
 
-    if (profile?.role === 'admin') {
-      return NextResponse.redirect(new URL('/admin', request.url))
-    }
-
-    // オーナー・スタッフは最初の店舗へ
-    const { data: storeUser } = await supabase
-      .from('store_users')
-      .select('store_id')
-      .eq('user_id', user.id)
-      .limit(1)
-      .single()
-
-    if (storeUser) {
-      return NextResponse.redirect(new URL(`/dashboard/${storeUser.store_id}`, request.url))
-    }
-
-    return NextResponse.redirect(new URL('/admin', request.url))
-  }
-
-  // /admin は admin のみ
+  // /admin 以下は管理者のみ
   if (pathname.startsWith('/admin')) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user!.id)
-      .single()
-
-    if (profile?.role !== 'admin') {
+    if (role !== 'admin') {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
   }
