@@ -1,5 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+/** 管理者専用: 店舗情報を取得 */
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  const { data, error } = await supabaseAdmin
+    .from('stores')
+    .select('id, store_name, category, area, address, phone_number, business_hours, slug, owner_id')
+    .eq('id', params.id)
+    .single()
+
+  if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json(data)
+}
+
 
 /** 管理者専用: 店舗情報を更新 */
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
