@@ -10,6 +10,8 @@ interface LpPage {
   status: string
   created_at: string
   header_image_url: string | null
+  view_count: number
+  line_click_count: number
 }
 
 interface LpAnalytics {
@@ -210,7 +212,7 @@ export default function AdminLpListPage() {
                 boxShadow: '0 1px 6px rgba(0,0,0,.06)',
               }}>
                 {/* LP情報 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: a ? 14 : 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <span style={{ background: st.color, color: 'white', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{st.label}</span>
@@ -247,11 +249,22 @@ export default function AdminLpListPage() {
                   </div>
                 </div>
 
-                {/* パフォーマンス指標 */}
+                {/* 直接計測バッジ */}
+                <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: 10, marginBottom: a ? 10 : 0, display: 'flex', gap: 8 }}>
+                  <div style={{ background: '#EFF6FF', borderRadius: 7, padding: '4px 10px', fontSize: 12, color: '#3B82F6', fontWeight: 600 }}>
+                    👁 {(lp.view_count || 0).toLocaleString()} PV
+                  </div>
+                  <div style={{ background: '#F0FDF4', borderRadius: 7, padding: '4px 10px', fontSize: 12, color: '#16A34A', fontWeight: 600 }}>
+                    💬 {(lp.line_click_count || 0).toLocaleString()} LINEクリック
+                  </div>
+                  <div style={{ marginLeft: 'auto', fontSize: 11, color: '#D1D5DB', alignSelf: 'center' }}>LP直接計測</div>
+                </div>
+
+                {/* パフォーマンス指標（広告計測） */}
                 {a && (
                   <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: 12, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                     {[
-                      { label: 'LPビュー', value: a.lp_views.toLocaleString(), unit: '回' },
+                      { label: 'LPビュー(広告)', value: a.lp_views.toLocaleString(), unit: '回' },
                       { label: 'LINE追加', value: a.line_adds.toLocaleString(), unit: '件' },
                       { label: 'CVR', value: a.cvr, unit: '%' },
                       { label: '稼働日数', value: String(a.days), unit: '日' },
