@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+function makeSupabase() {
+  const cookieStore = cookies()
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get(name: string) { return cookieStore.get(name)?.value }, set() {}, remove() {} } }
+  )
+}
 
 // LP一覧取得
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const supabase = makeSupabase()
   const { data, error } = await supabase
     .from('lp_pages')
     .select('*')
@@ -27,10 +33,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const supabase = makeSupabase()
   const body = await request.json()
   const {
     appeal_angle, catch_copy, sub_copy, service_description,
-    strengths, appeal_points, line_cta_text, line_benefit,
+    strengths, appeal_points, services, testimonials, faq,
+    line_cta_text, line_benefit,
     seo_title, seo_description, status = 'draft',
     primary_color, accent_color,
   } = body
@@ -49,7 +57,8 @@ export async function POST(
     .insert({
       store_id: params.id,
       appeal_angle, catch_copy, sub_copy, service_description,
-      strengths, appeal_points, line_cta_text, line_benefit,
+      strengths, appeal_points, services, testimonials, faq,
+      line_cta_text, line_benefit,
       seo_title, seo_description, status,
       primary_color: primary_color || '#7C3AED',
       accent_color: accent_color || '#EC4899',
