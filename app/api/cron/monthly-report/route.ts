@@ -3,102 +3,98 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
 export async function GET(request: NextRequest) {
   // Vercel Cronからのリクエストのみ受け付ける
-  if (request.headers.get('authorization') !== 'Bearer ' + process.env.CRON_SECRET) {
+  const cronSecret = process.env.CRON_SECRET
+  if (cronSecret && request.headers.get('authorization') !== 'Bearer ' + cronSecret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  try {
-    const now = new Date()
-    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
-    const from = lastMonth.toISOString().split('T')[0]
-    const to = lastMonthEnd.toISOString().split('T')[0]
-    const monthLabel = `${lastMonth.getFullYear()}年${lastMonth.getMonth() + 1}月`
+  const now = new Date()
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
+  const from = lastMonth.toISOString().split('T')[0]
+  const to = lastMonthEnd.toISOString().split('T')[0]
+  const monthLabel = `${lastMonth.getFullYear()}年${lastMonth.getMonth() + 1}月`
+  const monthKey = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}`
 
-    // アクティブ店舗一覧を取得
+  const results: Array<{ store: string, email: string | null, status: string }> = []
+
+  try {
+    // アクティブ店舗一覧（store.emailを使用）
     const { data: stores } = await supabase
       .from('stores')
-      .select('id, store_name, slug, owner_id')
+      .select('id, store_name, slug, email')
       .eq('status', 'active')
       .is('deleted_at', null)
 
     if (!stores || stores.length === 0) {
-      return NextResponse.json({ sent: 0, message: 'no active stores' })
+      return NextResponse.json({ ok: true, message: 'No active stores', processed: 0 })
     }
-
-    let sent = 0
-    const errors: string[] = []
 
     for (const store of stores) {
       try {
-        // オーナーのメールアドレスを取得
-        const { data: { user } } = await supabase.auth.admin.getUserById(store.owner_id)
-        if (!user?.email) continue
-
         // 先月の広告データを集計
-        const { data: ads } = await supabase
+        const { data: reports } = await supabase
           .from('ad_daily_reports')
-          .select('lp_views, line_adds, cost, sales')
+          .select('impressions, clicks, conversions, cost')
           .eq('store_id', store.id)
           .gte('date', from)
           .lte('date', to)
 
-        const totalViews = ads?.reduce((s, r) => s + (r.lp_views || 0), 0) || 0
-        const totalAdds = ads?.reduce((s, r) => s + (r.line_adds || 0), 0) || 0
-        const totalCost = ads?.reduce((s, r) => s + (r.cost || 0), 0) || 0
-        const cvr = totalViews > 0 ? ((totalAdds / totalViews) * 100).toFixed(1) : '0.0'
+        const totals = (reports || []).reduce((acc, r) => ({
+          impressions: acc.impressions + (r.impressions || 0),
+          clicks: acc.clicks + (r.clicks || 0),
+          conversions: acc.conversions + (r.conversions || 0),
+          cost: acc.cost + (r.cost || 0)
+        }), { impressions: 0, clicks: 0, conversions: 0, cost: 0 })
 
-        // 最新LP取得
-        const { data: lp } = await supabase
-          .from('lp_pages')
-          .select('catch_copy, appeal_angle, status')
-          .eq('store_id', store.id)
-          .eq('status', 'published')
-          .single()
+        const cvr = totals.clicks > 0 ? totals.conversions / totals.clicks * 100 : 0
+        const ctr = totals.impressions > 0 ? totals.clicks / totals.impressions * 100 : 0
 
-        // メール送信（Supabase Auth経由）
-        // 注: 本番ではSendGrid/Resendを使う。ここではconsole出力のみ
-        console.log(`[Monthly Report] ${store.store_name} (${user.email}): views=${totalViews}, adds=${totalAdds}, cvr=${cvr}%, cost=¥${totalCost}`)
+        // 月次レポートをDBに保存
+        await supabase.from('monthly_reports').upsert({
+          store_id: store.id,
+          month: monthKey,
+          impressions: totals.impressions,
+          clicks: totals.clicks,
+          conversions: totals.conversions,
+          cost: totals.cost,
+          cvr: Math.round(cvr * 100) / 100,
+          ctr: Math.round(ctr * 100) / 100
+        }, { onConflict: 'store_id,month' })
+
+        // メール内容を生成（実装時にメールサービスに送信）
+        const emailBody = `
+【${monthLabel}月次レポート】${store.store_name}
+
+■ 先月の実績
+- インプレッション: ${totals.impressions.toLocaleString()}
+- クリック数: ${totals.clicks.toLocaleString()}
+- CTR: ${ctr.toFixed(2)}%
+- コンバージョン: ${totals.conversions}
+- CVR: ${cvr.toFixed(2)}%
+- 広告費: ¥${totals.cost.toLocaleString()}
+
+■ 詳細はダッシュボードでご確認ください
+https://1page-studio.vercel.app/dashboard
+`
+
+        console.log(`[Monthly Report] ${store.store_name} (${store.email || 'no email'})`, emailBody)
         
-        // Supabaseのinviteを使ってメール送信（簡易版）
-        // 実際のメール本文
-        const emailBody = [
-          `${store.store_name} 様`,
-          '',
-          `【${monthLabel}度 月次パフォーマンスレポート】`,
-          '',
-          `■ LP閲覧数: ${totalViews.toLocaleString()} 回`,
-          `■ LINE追加数: ${totalAdds.toLocaleString()} 件`,
-          `■ CVR: ${cvr}%`,
-          `■ 広告費用: ¥${totalCost.toLocaleString()}`,
-          '',
-          lp ? `現在公開中のLP: ${lp.catch_copy || lp.appeal_angle || '（未設定）'}` : 'LPが公開されていません',
-          '',
-          `LP管理: https://1page-studio.vercel.app/lp/${store.slug}`,
-          '',
-          '1Page Studio チーム',
-        ].join('\n')
+        // TODO: メールサービス連携時はここでメール送信
+        // await sendEmail({ to: store.email, subject: `${monthLabel}月次レポート`, body: emailBody })
 
-        // ここではログのみ。実装時はSendGrid等のAPIを呼ぶ
-        console.log(emailBody)
-        sent++
-      } catch (err: any) {
-        errors.push(`${store.store_name}: ${err.message}`)
+        results.push({ store: store.store_name, email: store.email, status: 'saved' })
+      } catch (e: any) {
+        results.push({ store: store.store_name, email: store.email, status: `error: ${e.message}` })
       }
     }
 
-    return NextResponse.json({ 
-      ok: true, 
-      month: monthLabel,
-      sent, 
-      total: stores.length,
-      errors: errors.length > 0 ? errors : undefined
-    })
+    return NextResponse.json({ ok: true, month: monthLabel, processed: results.length, results })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
