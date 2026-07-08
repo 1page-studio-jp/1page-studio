@@ -22,6 +22,22 @@ export async function GET(request: NextRequest) {
         sql: `ALTER TABLE lp_pages ADD COLUMN IF NOT EXISTS header_image_url TEXT`
       },
       {
+        key: 'monthly_reports_table',
+        sql: `CREATE TABLE IF NOT EXISTS monthly_reports (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          store_id UUID NOT NULL REFERENCES stores(id),
+          month VARCHAR(7) NOT NULL,
+          impressions INTEGER DEFAULT 0,
+          clicks INTEGER DEFAULT 0,
+          conversions INTEGER DEFAULT 0,
+          cost NUMERIC DEFAULT 0,
+          cvr NUMERIC DEFAULT 0,
+          ctr NUMERIC DEFAULT 0,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(store_id, month)
+        )`
+      },
+      {
         key: 'policy_select',
         sql: `DO $do$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='lp_images_select') THEN CREATE POLICY "lp_images_select" ON storage.objects FOR SELECT USING (bucket_id = 'lp-images'); END IF; END $do$`
       },
