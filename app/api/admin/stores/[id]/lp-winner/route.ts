@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const cookieStore = cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get(n: string) { return cookieStore.get(n)?.value }, set() {}, remove() {} } }
+  )
+
   try {
-    // LP一覧と分析データを取得
     const { data: lps } = await supabase
       .from('lp_pages')
       .select('id, appeal_angle, catch_copy, status, created_at')
@@ -24,58 +27,50 @@ export async function GET(
       return NextResponse.json({ error: 'LPがありません' }, { status: 404 })
     }
 
-    // 各LPのアナリティクスを取得（date-rangeベース）
     const today = new Date().toISOString().split('T')[0]
-    const lpDataList = await Promise.all(lps.map(async (lp, idx) => {
-      const from = lp.created_at.split('T')[0]
-      const to = lps[idx - 1]?.created_at.split('T')[0] || today
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-      const { data: ads } = await supabase
+    const lpDataList = await Promise.all(lps.map(async (lp) => {
+      const { data: reports } = await supabase
         .from('ad_daily_reports')
-        .select('lp_views, line_adds, cost, sales')
-        .eq('store_id', params.id)
-        .gte('date', from)
-        .lte('date', to)
+        .select('impressions, clicks, conversions, cost')
+        .eq('lp_id', lp.id)
+        .gte('date', thirtyDaysAgo)
+        .lte('date', today)
 
-      const views = ads?.reduce((s, r) => s + (r.lp_views || 0), 0) || 0
-      const adds = ads?.reduce((s, r) => s + (r.line_adds || 0), 0) || 0
-      const cost = ads?.reduce((s, r) => s + (r.cost || 0), 0) || 0
+      const totals = (reports || []).reduce((acc, r) => ({
+        impressions: acc.impressions + (r.impressions || 0),
+        clicks: acc.clicks + (r.clicks || 0),
+        conversions: acc.conversions + (r.conversions || 0),
+        cost: acc.cost + (r.cost || 0)
+      }), { impressions: 0, clicks: 0, conversions: 0, cost: 0 })
 
-      return {
-        appeal_angle: lp.appeal_angle || '不明',
-        catch_copy: lp.catch_copy || '',
-        status: lp.status,
-        lp_views: views,
-        line_adds: adds,
-        cost,
-        cvr: views > 0 ? ((adds / views) * 100).toFixed(1) : '0.0',
-        period: from + ' 〜 ' + to,
-      }
+      const cvr = totals.clicks > 0 ? (totals.conversions / totals.clicks * 100).toFixed(2) : '0'
+      const ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions * 100).toFixed(2) : '0'
+      const cpa = totals.conversions > 0 ? (totals.cost / totals.conversions).toFixed(0) : 'N/A'
+
+      return { id: lp.id, appeal_angle: lp.appeal_angle, catch_copy: lp.catch_copy, status: lp.status, created_at: lp.created_at, ...totals, cvr, ctr, cpa }
     }))
 
-    // Geminiで分析
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
-    const prompt = [
-      'あなたはマーケティング分析の専門家です。',
-      '以下のLPパフォーマンスデータを分析して、JSON形式で回答してください。',
-      '',
-      'LPデータ:',
-      JSON.stringify(lpDataList, null, 2),
-      '',
-      '以下のJSON形式で回答:',
-      '{',
-      '  "winner_angle": "最もCVRが高い訴求角度",',
-      '  "winner_reason": "勝者の理由（2〜3文）",',
-      '  "next_angle": "次にテストすべき訴求角度（具体的に）",',
-      '  "next_reason": "次の訴求角度の理由（2〜3文）",',
-      '  "insights": ["インサイト1", "インサイト2", "インサイト3"]',
-      '}',
-    ].join('\n')
+    const prompt = `以下のLP（ランディングページ）のパフォーマンスデータを分析し、最も効果的なLPを特定してください。
+
+LPデータ:
+${lpDataList.map((lp, i) => `LP${i + 1}:
+- 訴求角度: ${lp.appeal_angle || '未設定'}
+- キャッチコピー: ${lp.catch_copy || '未設定'}
+- インプレッション: ${lp.impressions} | CVR: ${lp.cvr}% | CTR: ${lp.ctr}% | コンバージョン: ${lp.conversions} | CPA: ${lp.cpa}`).join('\n\n')}
+
+以下のJSON形式のみで回答（説明不要）:
+{"winner_angle":"勝者の訴求角度","winner_reason":"理由100字以内","next_angle":"次に試す訴求角度","next_reason":"理由100字以内","insights":["インサイト1","インサイト2","インサイト3"]}`
 
     const result = await model.generateContent(prompt)
     const text = result.response.text()
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { winner_angle: '分析不能', winner_reason: text, next_angle: '', next_reason: '', insights: [] }
+    let analysis = null
+    if (jsonMatch) {
+      try { analysis = JSON.parse(jsonMatch[0]) } catch { analysis = null }
+    }
 
     return NextResponse.json({ analysis, lp_data: lpDataList })
   } catch (e: any) {
