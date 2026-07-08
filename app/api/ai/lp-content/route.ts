@@ -9,15 +9,16 @@ export async function POST(request: NextRequest) {
       storeCategory,
       area,
       appeal_angle,
+      brief,
       existing_strengths,
       existing_services,
       phone,
       business_hours,
     } = body
 
-    if (!storeName || !storeCategory || !appeal_angle) {
+    if (!storeName || !storeCategory) {
       return NextResponse.json(
-        { error: 'storeName, storeCategory, appeal_angle は必須です' },
+        { error: 'storeName と storeCategory は必須です' },
         { status: 400 }
       )
     }
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest) {
       storeName,
       storeCategory,
       area,
+      brief,
       appeal_angle,
       existing_strengths,
       existing_services,
