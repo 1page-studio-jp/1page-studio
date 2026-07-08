@@ -128,7 +128,7 @@ export default async function LpPublicPage({ params }: Props) {
         <div style={{ position: 'relative' }}>
           {hasLine ? (
             <>
-              <a href={lp.line_button_url} target="_blank" rel="noopener noreferrer" className="lbtn"><LineSVG />{lp.line_cta_text || 'LINEで予約・お問い合わせ'}</a>
+              <LpLineButton slug={lp.slug} href={lp.line_button_url} className="lbtn"><LineSVG />{lp.line_cta_text || 'LINEで予約・お問い合わせ'}</LpLineButton>
               {lp.line_benefit && <div style={{ marginTop: 12, fontSize: 13, opacity: .85, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><span>🎁</span><span>{lp.line_benefit}</span></div>}
             </>
           ) : hasPhone ? (
@@ -297,7 +297,7 @@ export default async function LpPublicPage({ params }: Props) {
         <p style={{ fontSize: 14, color: 'rgba(255,255,255,.78)', marginBottom: 28 }}>お問い合わせは無料です</p>
         {hasLine ? (
           <>
-            <a href={lp.line_button_url} target="_blank" rel="noopener noreferrer" className="lbtn"><LineSVG />{lp.line_cta_text || 'LINEで予約する'}</a>
+            <LpLineButton slug={lp.slug} href={lp.line_button_url} className="lbtn"><LineSVG />{lp.line_cta_text || 'LINEで予約する'}</LpLineButton>
             {lp.line_benefit && <p style={{ color: 'rgba(255,255,255,.82)', fontSize: 13, marginTop: 12 }}>🎁 {lp.line_benefit}</p>}
           </>
         ) : hasPhone ? (
@@ -312,7 +312,7 @@ export default async function LpPublicPage({ params }: Props) {
 
       {hasLine && (
         <div className="sticky">
-          <a href={lp.line_button_url} target="_blank" rel="noopener noreferrer" className="lbtn"><LineSVG />{lp.line_cta_text || 'LINEで予約する'}</a>
+          <LpLineButton slug={lp.slug} href={lp.line_button_url} className="lbtn"><LineSVG />{lp.line_cta_text || 'LINEで予約する'}</LpLineButton>
         </div>
       )}
     </div>
