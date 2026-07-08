@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { Metadata } from 'next'
+import { LpViewTracker, LpLineButton } from '@/components/lp-tracker'
 
 interface Props { params: { slug: string } }
 
@@ -102,6 +103,7 @@ export default async function LpPublicPage({ params }: Props) {
   return (
     <div style={{ fontFamily: "'Hiragino Sans','Noto Sans JP',sans-serif", background: '#FAFAFA', minHeight: '100vh', paddingBottom: hasCta ? 80 : 0 }}>
       <style>{css}</style>
+              <LpViewTracker slug={lp.slug} />
 
       {lp.header_image_url && (
         <div style={{ width: '100%', maxHeight: 420, overflow: 'hidden', lineHeight: 0, position: 'relative' }}>
