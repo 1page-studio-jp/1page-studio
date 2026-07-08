@@ -52,7 +52,7 @@ export async function GET(
       return { id: lp.id, appeal_angle: lp.appeal_angle, catch_copy: lp.catch_copy, status: lp.status, created_at: lp.created_at, ...totals, cvr, ctr, cpa }
     }))
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
     const prompt = `以下のLP（ランディングページ）のパフォーマンスデータを分析し、最も効果的なLPを特定してください。
 
 LPデータ:
