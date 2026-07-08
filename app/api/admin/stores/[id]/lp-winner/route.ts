@@ -5,6 +5,27 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
+function rulesBasedAnalysis(lpDataList: any[]) {
+  const sorted = [...lpDataList].sort((a, b) => parseFloat(b.cvr) - parseFloat(a.cvr))
+  const winner = sorted[0]
+  const loser = sorted[sorted.length - 1]
+  const angles = ['価格訴求（コスパ強調）', 'クオリティ訴求（品質・実績）', 'スピード訴求（即日対応）', '安心感訴求（アフターケア）', '体験訴求（ビフォーアフター）']
+  const usedAngles = lpDataList.map(lp => lp.appeal_angle).filter(Boolean)
+  const nextAngle = angles.find(a => !usedAngles.some(u => u.includes(a.split('（')[0]))) || '新しい訴求軸でテスト'
+  return {
+    winner_angle: winner.appeal_angle || 'デフォルトLP',
+    winner_reason: `CVR ${winner.cvr}%が最も高く、${winner.clicks}クリック中${winner.conversions}件転換`,
+    next_angle: nextAngle,
+    next_reason: 'まだ試していない訴求軸でA/Bテストを実施し、さらなる改善を目指す',
+    insights: [
+      `最高CVR: ${winner.cvr}% (${winner.appeal_angle || 'LP1'})`,
+      `平均CTR: ${(lpDataList.reduce((s, l) => s + parseFloat(l.ctr), 0) / lpDataList.length).toFixed(2)}%`,
+      lpDataList.length > 1 ? `CVR差: ${(parseFloat(winner.cvr) - parseFloat(loser.cvr)).toFixed(2)}%ポイント` : 'さらにLPを追加してA/Bテストを'
+    ],
+    method: 'rules'
+  }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -52,26 +73,26 @@ export async function GET(
       return { id: lp.id, appeal_angle: lp.appeal_angle, catch_copy: lp.catch_copy, status: lp.status, created_at: lp.created_at, ...totals, cvr, ctr, cpa }
     }))
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-    const prompt = `以下のLP（ランディングページ）のパフォーマンスデータを分析し、最も効果的なLPを特定してください。
+    // まずGeminiで試みる、失敗時はルールベースにフォールバック
+    try {
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' })
+      const prompt = `LP比較分析。JSON形式のみで回答:
+${lpDataList.map((lp, i) => `LP${i + 1}: 訴求=${lp.appeal_angle || 'N/A'} CVR=${lp.cvr}% CTR=${lp.ctr}%`).join(' / ')}
+{"winner_angle":"...","winner_reason":"100字以内","next_angle":"...","next_reason":"100字以内","insights":["...","...","..."]}`
 
-LPデータ:
-${lpDataList.map((lp, i) => `LP${i + 1}:
-- 訴求角度: ${lp.appeal_angle || '未設定'}
-- キャッチコピー: ${lp.catch_copy || '未設定'}
-- インプレッション: ${lp.impressions} | CVR: ${lp.cvr}% | CTR: ${lp.ctr}% | コンバージョン: ${lp.conversions} | CPA: ${lp.cpa}`).join('\n\n')}
-
-以下のJSON形式のみで回答（説明不要）:
-{"winner_angle":"勝者の訴求角度","winner_reason":"理由100字以内","next_angle":"次に試す訴求角度","next_reason":"理由100字以内","insights":["インサイト1","インサイト2","インサイト3"]}`
-
-    const result = await model.generateContent(prompt)
-    const text = result.response.text()
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    let analysis = null
-    if (jsonMatch) {
-      try { analysis = JSON.parse(jsonMatch[0]) } catch { analysis = null }
+      const result = await model.generateContent(prompt)
+      const text = result.response.text()
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const analysis = JSON.parse(jsonMatch[0])
+        return NextResponse.json({ analysis: { ...analysis, method: 'ai' }, lp_data: lpDataList })
+      }
+    } catch (geminiErr: any) {
+      console.warn('Gemini unavailable, using rules-based analysis:', geminiErr.message?.slice(0, 100))
     }
 
+    // ルールベースフォールバック
+    const analysis = rulesBasedAnalysis(lpDataList)
     return NextResponse.json({ analysis, lp_data: lpDataList })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
