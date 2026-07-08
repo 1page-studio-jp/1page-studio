@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { FileText, ExternalLink, Edit, Globe, Clock } from 'lucide-react'
+import { FileText, ExternalLink, Edit, Globe, Clock, Plus } from 'lucide-react'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
@@ -21,11 +21,11 @@ export default async function LpListPage({ params }: { params: { storeId: string
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold">LP ç®¡ç</h1>
+            <h1 className="text-2xl font-bold">LP 管理</h1>
             <p className="text-muted-foreground mt-1">
-              {lps?.length ?? 0}ä»¶ Â·{' '}
+              {lps?.length ?? 0}件 ·{' '}
               <span className={publishedCount > 0 ? 'text-emerald-600 font-medium' : ''}>
-                {publishedCount > 0 ? `${publishedCount}ä»¶ å¬éä¸­` : 'å¬éãªã'}
+                {publishedCount > 0 ? `${publishedCount}件 公開中` : '公開なし'}
               </span>
             </p>
           </div>
@@ -41,12 +41,12 @@ export default async function LpListPage({ params }: { params: { storeId: string
             <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-2xl bg-muted mb-4">
               <FileText className="h-8 w-8 text-muted-foreground/50" />
             </div>
-            <p className="font-semibold">LP ãã¾ã ããã¾ãã</p>
-            <p className="text-sm text-muted-foreground mt-1">LPï¼ã©ã³ãã£ã³ã°ãã¼ã¸ï¼ãä½ã£ã¦éå®¢ãå§ãã¾ããã</p>
+            <p className="font-semibold">LP まだありません</p>
+            <p className="text-sm text-muted-foreground mt-1">LP（ランディングページ）を作って集客を始めましょう。</p>
             <Link href={`/dashboard/${params.storeId}/lp/new`}>
               <button className="mt-5 flex items-center gap-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium px-5 py-2.5 hover:bg-primary/90 transition-colors mx-auto">
                 <Plus className="h-4 w-4" />
-                æåã® LP ãä½ã
+                最初の LP を作る
               </button>
             </Link>
           </div>
@@ -78,7 +78,7 @@ export default async function LpListPage({ params }: { params: { storeId: string
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold text-sm truncate">{lp.title || 'ç¡é¡ã®LP'}</h3>
+                        <h3 className="font-semibold text-sm truncate">{lp.title || '無題のLP'}</h3>
                         <span className={cn(
                           'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium',
                           isPublished
@@ -89,7 +89,7 @@ export default async function LpListPage({ params }: { params: { storeId: string
                         )}>
                           {isPublished && <Globe className="h-3 w-3" />}
                           {lp.status === 'draft' && <Clock className="h-3 w-3" />}
-                          {isPublished ? 'å¬éä¸­' : lp.status === 'draft' ? 'ä¸æ¸ã' : 'ã¢ã¼ã«ã¤ã'}
+                          {isPublished ? '公開中' : lp.status === 'draft' ? '下書き' : 'アーカイブ'}
                         </span>
                       </div>
 
@@ -99,7 +99,7 @@ export default async function LpListPage({ params }: { params: { storeId: string
 
                       <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        {format(new Date(lp.updated_at), 'Mædæ¥ æ´æ°', { locale: ja })}
+                        {format(new Date(lp.updated_at), 'M月d日 更新', { locale: ja })}
                       </p>
                     </div>
 
@@ -115,7 +115,7 @@ export default async function LpListPage({ params }: { params: { storeId: string
                       <Link href={`/dashboard/${params.storeId}/lp/${lp.id}/edit`}>
                         <button className="flex items-center gap-1.5 rounded-xl border bg-card px-3 py-2 text-xs font-medium hover:bg-muted transition-colors">
                           <Edit className="h-3.5 w-3.5" />
-                          ç·¨é
+                          編集
                         </button>
                       </Link>
                     </div>
