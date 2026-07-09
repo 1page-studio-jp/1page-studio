@@ -142,7 +142,7 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
     {
       label: 'Google口コミに返信する',
       done: false,
-      href: '#',
+      href: 'https://business.google.com/'
     },
   ]
   const todoDone = todos.filter(t => t.done).length
