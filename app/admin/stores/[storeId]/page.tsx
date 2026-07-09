@@ -468,7 +468,8 @@ export default async function AdminStoreDetailPage({ params }: { params: { store
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
                 <StickyNote className="h-4 w-4" />
-                担当者メム:              </CardTitle>
+                担当者メモ
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <PartnerNoteForm storeId={store.id} />
