@@ -110,12 +110,12 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
 
   const connectedPlatforms = (connections ?? []).map(c => c.platform)
   const scoreItems: ScoreItem[] = [
-    { label: 'LP完成度',        done: !!lp?.catch_copy,                partial: !!lp && !lp.catch_copy, note: lp?.catch_copy ? '設定済み' : '未設定' },
-    { label: 'Google設定',      done: connectedPlatforms.includes('google'),   note: connectedPlatforms.includes('google') ? '連携済み' : '未設定' },
-    { label: 'LINE設定',        done: !!lp?.line_button_url,           note: lp?.line_button_url ? '設定済み' : '未設定' },
-    { label: '広告設定',        done: hasAds,                          note: hasAds ? '運用中' : '未設定' },
-    { label: 'クーポン設定',    done: (activeCoupons?.length ?? 0) > 0, note: (activeCoupons?.length ?? 0) > 0 ? '公開中' : '未設定' },
-    { label: 'Google口コミ返信率', done: false, partial: true,         note: '確認中' },
+    { label: 'LP完成度',       done: !!lp?.catch_copy,                              partial: !!lp && !lp.catch_copy, note: lp?.catch_copy ? '設定済み' : '未設定' },
+    { label: 'Google設定',     done: connectedPlatforms.includes('google'),          note: connectedPlatforms.includes('google') ? '連携済み' : '未設定' },
+    { label: 'LINE設定',       done: !!lp?.line_button_url,                          note: lp?.line_button_url ? '設定済み' : '未設定' },
+    { label: '広告設定',       done: hasAds,                                         note: hasAds ? '運用中' : '未設定' },
+    { label: 'クーポン設定',   done: (activeCoupons?.length ?? 0) > 0,               note: (activeCoupons?.length ?? 0) > 0 ? '公開中' : '未設定' },
+    { label: 'Google口コミ返信率', done: false, partial: true,                       note: '確認中' },
   ]
 
   const newInquiryCount = newInquiries?.length ?? 0
@@ -142,7 +142,7 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
     {
       label: 'Google口コミに返信する',
       done: false,
-      href: 'https://business.google.com/'
+      href: 'https://business.google.com/',
     },
   ]
   const todoDone = todos.filter(t => t.done).length
