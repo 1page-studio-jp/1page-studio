@@ -58,7 +58,7 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
     supabase.from('ai_comments').select('*').eq('store_id', params.storeId).eq('approved', true).order('generated_at', { ascending: false }).limit(1).single(),
     supabase.from('inquiries').select('id, customer_name, created_at').eq('store_id', params.storeId).eq('status', 'new').order('created_at', { ascending: false }).limit(5),
     supabase.from('lp_pages').select('id, slug, title, status, catch_copy, line_button_url').eq('store_id', params.storeId).eq('status', 'published').limit(1).single(),
-    supabase.from('coupons').select('id').eq('store_id', params.storeId).eq('status', 'active').is('deleted_at', null),
+    supabase.from('coupons').select('id').eq('store_id', params.storeId).eq('display_status', 'visible').is('deleted_at', null),
     supabase.from('platform_connections').select('platform').eq('store_id', params.storeId).eq('is_active', true),
   ])
 
@@ -136,7 +136,7 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
     },
     {
       label: (activeCoupons?.length ?? 0) > 0 ? 'クーポンを確認・更新する' : 'クーポンを作成する',
-      done: false,
+      done: (activeCoupons?.length ?? 0) > 0,
       href: `/dashboard/${params.storeId}/coupons`,
     },
     {
@@ -320,7 +320,7 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
           <div className="grid grid-cols-2 gap-3">
             {[
               { href: `/dashboard/${params.storeId}/lp`, icon: FileText, label: 'LP を編集', color: 'text-blue-500', bg: 'bg-blue-50' },
-              { href: `/dashboard/${params.storeId}/coupons`, icon: Tag, label: 'クーポンを作る', color: 'text-amber-500', bg: 'bg-amber-50' },
+              { href: `/dashboard/${params.storeId}/coupons`, icon: Tag, label: (activeCoupons?.length ?? 0) > 0 ? 'クーポンを管理する' : 'クーポンを作る', color: 'text-amber-500', bg: 'bg-amber-50' },
               { href: `/dashboard/${params.storeId}/inquiries`, icon: MessageSquare, label: '問い合わせを見る', color: 'text-violet-500', bg: 'bg-violet-50' },
               { href: `/dashboard/${params.storeId}/reports`, icon: TrendingUp, label: '数字を確認する', color: 'text-emerald-500', bg: 'bg-emerald-50' },
             ].map(({ href, icon: Icon, label, color, bg }) => (
