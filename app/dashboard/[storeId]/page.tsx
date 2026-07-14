@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { MetricCard } from '@/components/dashboard/metric-card'
 import { ScoreCard, type ScoreItem } from '@/components/dashboard/score-card'
@@ -46,7 +47,7 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
     { data: monthReports },
     { data: prevMonthReports },
     { data: latestComment },
-    { data: newInquiries },
+    { data: newInquiries, count: inquiryCountRaw },
     { data: lp },
     { data: activeCoupons },
     { data: connections },
@@ -56,11 +57,13 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
     supabase.from('ad_daily_reports').select('*').eq('store_id', params.storeId).gte('date', monthStart).lte('date', monthEnd),
     supabase.from('ad_daily_reports').select('*').eq('store_id', params.storeId).gte('date', prevMonthStart).lte('date', prevMonthEnd),
     supabase.from('ai_comments').select('*').eq('store_id', params.storeId).eq('approved', true).order('generated_at', { ascending: false }).limit(1).single(),
-    supabase.from('inquiries').select('id, customer_name, created_at').eq('store_id', params.storeId).eq('status', 'new').order('created_at', { ascending: false }).limit(5),
+    supabase.from('inquiries').select('id, customer_name, created_at', { count: 'exact' }).eq('store_id', params.storeId).eq('status', 'new').order('created_at', { ascending: false }).limit(5),
     supabase.from('lp_pages').select('id, slug, title, status, catch_copy, line_button_url').eq('store_id', params.storeId).eq('status', 'published').limit(1).single(),
     supabase.from('coupons').select('id').eq('store_id', params.storeId).eq('display_status', 'visible').is('deleted_at', null),
     supabase.from('platform_connections').select('platform').eq('store_id', params.storeId).eq('is_active', true),
   ])
+
+  if (!store) notFound()
 
   // ── 今日の集計 ────────────────────────────────────────────
   const todaySum = (todayReports ?? []).reduce((a, r) => ({
@@ -118,15 +121,15 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
     { label: 'Google口コミ返信率', done: false, partial: true,                       note: '確認中' },
   ]
 
-  const newInquiryCount = newInquiries?.length ?? 0
+  const resolvedInquiryCount = inquiryCountRaw ?? newInquiries?.length ?? 0
   const dayLabel = format(today, 'M月d日（E）', { locale: ja })
   const monthLabel = format(today, 'M月', { locale: ja })
 
   // ── 今日やること（動的生成） ───────────────────────────────
   const todos: { label: string; done: boolean; href: string }[] = [
     {
-      label: newInquiryCount > 0 ? `お問い合わせに返信する（${newInquiryCount}件）` : 'お問い合わせを確認する',
-      done: newInquiryCount === 0,
+      label: resolvedInquiryCount > 0 ? `お問い合わせに返信する（${resolvedInquiryCount}件）` : 'お問い合わせを確認する',
+      done: resolvedInquiryCount === 0,
       href: `/dashboard/${params.storeId}/inquiries`,
     },
     {
@@ -173,7 +176,7 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
         </div>
 
         {/* ══ 未対応アラート ══════════════════════════════════ */}
-        {newInquiryCount > 0 && (
+        {resolvedInquiryCount > 0 && (
           <Link href={`/dashboard/${params.storeId}/inquiries`}>
             <div className="flex items-center gap-3 rounded-2xl bg-orange-50 border border-orange-100 px-4 py-3.5 hover:bg-orange-100/80 transition-colors cursor-pointer">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-100">
@@ -181,7 +184,7 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-orange-800">
-                  未対応のお問い合わせが {newInquiryCount}件
+                  未対応のお問い合わせが {resolvedInquiryCount}件
                 </p>
                 <p className="text-xs text-orange-500 mt-0.5">
                   {newInquiries?.[0]?.customer_name ?? '匿名'}さん が待っています
@@ -327,7 +330,7 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
               <Link key={href} href={href}>
                 <div className="flex items-center gap-3 rounded-2xl bg-white border border-gray-100 px-4 py-4 hover:shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer">
                   <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${bg}`}>
-                    <Icon className={`h-4.5 w-4.5 ${color}`} />
+                    <Icon className={`h-[18px] w-[18px] ${color}`} />
                   </div>
                   <span className="text-sm font-medium text-gray-800">{label}</span>
                   <ArrowRight className="h-3.5 w-3.5 text-gray-300 ml-auto shrink-0" />
