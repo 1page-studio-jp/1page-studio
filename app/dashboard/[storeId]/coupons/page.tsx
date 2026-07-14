@@ -24,8 +24,12 @@ export default async function CouponsPage({ params }: { params: { storeId: strin
   const now = new Date()
 
   function getCouponStatus(coupon: Coupon) {
-    if (coupon.display_status !== 'visible') return { label: '無効', variant: 'secondary' as const }
+    // display_status が 'expired' なら期限切れ
+    if (coupon.display_status === 'expired') return { label: '期限切れ', variant: 'warning' as const }
+    // 有効期限が過ぎていても期限切れ
     if (coupon.expiry_date && new Date(coupon.expiry_date) < now) return { label: '期限切れ', variant: 'warning' as const }
+    // display_status が 'visible' 以外（hidden など）は無効
+    if (coupon.display_status !== 'visible') return { label: '無効', variant: 'secondary' as const }
     return { label: '有効', variant: 'success' as const }
   }
 
