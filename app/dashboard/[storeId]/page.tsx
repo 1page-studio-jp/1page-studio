@@ -1,15 +1,13 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { MetricCard } from '@/components/dashboard/metric-card'
-import { ScoreCard, type ScoreItem } from '@/components/dashboard/score-card'
 import { AiCommentBox } from '@/components/dashboard/ai-comment-box'
 import Link from 'next/link'
 import {
   CalendarCheck, MessageSquare, UserPlus, TrendingUp,
-  FileText, Tag, ArrowRight, Bell, ExternalLink,
-  CheckCircle2, TrendingDown,
+  ArrowRight, Bell, ExternalLink,
+  CheckCircle2, TrendingDown, Tag, FileText, Wifi,
 } from 'lucide-react'
-import { formatCurrency, formatNumber, calcScore } from '@/lib/utils'
+import { formatCurrency, formatNumber } from '@/lib/utils'
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import { ja } from 'date-fns/locale'
 
@@ -70,8 +68,7 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
     inquiries: a.inquiries + (r.inquiries || 0),
     line_adds: a.line_adds + (r.line_adds || 0),
     revenue: a.revenue + Number(r.revenue || r.sales || 0),
-    lp_views: a.lp_views + (r.lp_views || 0),
-  }), { reservations: 0, inquiries: 0, line_adds: 0, revenue: 0, lp_views: 0 })
+  }), { reservations: 0, inquiries: 0, line_adds: 0, revenue: 0 })
 
   const monthSum = (monthReports ?? []).reduce((a, r) => ({
     spend: a.spend + Number(r.spend || r.cost || 0),
@@ -79,9 +76,7 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
     line_adds: a.line_adds + (r.line_adds || 0),
     inquiries: a.inquiries + (r.inquiries || 0),
     reservations: a.reservations + (r.reservations || 0),
-    lp_views: a.lp_views + (r.lp_views || 0),
-    coupon_uses: a.coupon_uses + (r.coupon_uses || 0),
-  }), { spend: 0, revenue: 0, line_adds: 0, inquiries: 0, reservations: 0, lp_views: 0, coupon_uses: 0 })
+  }), { spend: 0, revenue: 0, line_adds: 0, inquiries: 0, reservations: 0 })
 
   const prevSum = (prevMonthReports ?? []).reduce((a, r) => ({
     revenue: a.revenue + Number(r.revenue || r.sales || 0),
@@ -95,55 +90,83 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
   const growthRevenue = prevSum.revenue > 0 ? Math.round(((monthSum.revenue - prevSum.revenue) / prevSum.revenue) * 100) : 0
   const growthReservation = monthSum.reservations - prevSum.reservations
 
-  const lineAddRate = monthSum.lp_views > 0 ? (monthSum.line_adds / monthSum.lp_views) * 100 : 0
   const hasAds = monthSum.spend > 0
   const roas = hasAds && monthSum.revenue > 0 ? monthSum.revenue / monthSum.spend : 0
-  const score = calcScore({
-    lineAddRate,
-    inquiryRate: monthSum.lp_views > 0 ? (monthSum.inquiries / monthSum.lp_views) * 100 : 0,
-    reservationRate: monthSum.lp_views > 0 ? (monthSum.reservations / monthSum.lp_views) * 100 : 0,
-    couponUseRate: monthSum.lp_views > 0 ? (monthSum.coupon_uses / monthSum.lp_views) * 100 : 0,
-    roas,
-  })
 
   const connectedPlatforms = (connections ?? []).map(c => c.platform)
-  const scoreItems: ScoreItem[] = [
-    { label: 'LP完成度', done: !!lp?.catch_copy, partial: !!lp && !lp.catch_copy, note: lp?.catch_copy ? '設定済み' : '未設定' },
-    { label: 'Google設定', done: connectedPlatforms.includes('google'), note: connectedPlatforms.includes('google') ? '連携済み' : '未設定' },
-    { label: 'LINE設定', done: !!lp?.line_button_url, note: lp?.line_button_url ? '設定済み' : '未設定' },
-    { label: '広告設定', done: hasAds, note: hasAds ? '運用中' : '未設定' },
-    { label: 'クーポン設定', done: (activeCoupons?.length ?? 0) > 0, note: (activeCoupons?.length ?? 0) > 0 ? '公開中' : '未設定' },
-    { label: 'Google口コミ返信率', done: false, partial: true, note: '確認中' },
-  ]
-
   const resolvedInquiryCount = inquiryCountRaw ?? newInquiries?.length ?? 0
   const dayLabel = format(today, 'M月d日（E）', { locale: ja })
   const monthLabel = format(today, 'M月', { locale: ja })
 
-  const todos: { label: string; done: boolean; href: string }[] = [
-    {
-      label: resolvedInquiryCount > 0 ? `お問い合わせに返信する（${resolvedInquiryCount}件）` : 'お問い合わせを確認する',
-      done: resolvedInquiryCount === 0,
+  // ── Todo: 全て統合。セットアップ未完了 + 日次タスク
+  type Todo = {
+    label: string
+    done: boolean
+    href: string
+    actionLabel: string
+    urgent?: boolean
+    icon: React.ElementType
+  }
+
+  const todos: Todo[] = [
+    // 🔴 緊急：未対応問い合わせ
+    ...(resolvedInquiryCount > 0 ? [{
+      label: `お問い合わせに返信する（${resolvedInquiryCount}件）`,
+      done: false,
       href: `/dashboard/${params.storeId}/inquiries`,
-    },
-    {
-      label: lp ? 'LPの内容を確認する' : 'LPを作成する',
-      done: !!lp?.catch_copy,
+      actionLabel: '今すぐ返信',
+      urgent: true,
+      icon: MessageSquare,
+    }] : []),
+    // セットアップ未完了
+    ...(!lp ? [{
+      label: 'LPを作成する（未作成）',
+      done: false,
       href: `/dashboard/${params.storeId}/lp`,
-    },
+      actionLabel: '作成する',
+      urgent: false,
+      icon: FileText,
+    }] : []),
+    ...(lp && !lp.line_button_url ? [{
+      label: 'LINEボタンをLPに追加する',
+      done: false,
+      href: `/dashboard/${params.storeId}/lp`,
+      actionLabel: '設定する',
+      urgent: false,
+      icon: Wifi,
+    }] : []),
+    // 日次タスク
     {
-      label: (activeCoupons?.length ?? 0) > 0 ? 'クーポンを確認・更新する' : 'クーポンを作成する',
+      label: (activeCoupons?.length ?? 0) > 0
+        ? `クーポンを確認する（${activeCoupons?.length ?? 0}件公開中）`
+        : 'クーポンを作成する',
       done: (activeCoupons?.length ?? 0) > 0,
       href: `/dashboard/${params.storeId}/coupons`,
+      actionLabel: (activeCoupons?.length ?? 0) > 0 ? '確認する' : '作成する',
+      urgent: false,
+      icon: Tag,
     },
     {
       label: 'Google口コミに返信する',
       done: false,
       href: 'https://business.google.com/',
+      actionLabel: '返信する',
+      urgent: false,
+      icon: MessageSquare,
     },
+    // 問い合わせ確認（0件の場合）
+    ...(resolvedInquiryCount === 0 ? [{
+      label: 'お問い合わせを確認する（対応済み）',
+      done: true,
+      href: `/dashboard/${params.storeId}/inquiries`,
+      actionLabel: '確認する',
+      urgent: false,
+      icon: MessageSquare,
+    }] : []),
   ]
+
   const todoDone = todos.filter(t => t.done).length
-  const todoPercent = Math.round((todoDone / todos.length) * 100)
+  const todoPercent = todos.length > 0 ? Math.round((todoDone / todos.length) * 100) : 0
 
   return (
     <div className="min-h-full bg-gray-50/60">
@@ -175,27 +198,7 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
           )}
         </div>
 
-        {/* ══ 未対応アラート ══ */}
-        {resolvedInquiryCount > 0 && (
-          <Link href={`/dashboard/${params.storeId}/inquiries`}>
-            <div className="flex items-center gap-3 rounded-2xl bg-orange-50 border border-orange-100 px-4 py-4 hover:bg-orange-100/60 transition-colors group">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100 ring-4 ring-orange-50">
-                <Bell className="h-4 w-4 text-orange-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-orange-800">
-                  未対応のお問い合わせが {resolvedInquiryCount}件あります
-                </p>
-                <p className="text-xs text-orange-400 mt-0.5">
-                  {newInquiries?.[0]?.customer_name ?? '匿名'}さんが待っています
-                </p>
-              </div>
-              <ArrowRight className="h-4 w-4 text-orange-300 shrink-0 group-hover:translate-x-0.5 transition-transform" />
-            </div>
-          </Link>
-        )}
-
-        {/* ══ ② 今日やること ══ */}
+        {/* ══ ② 今日やること（アクションボタン統合）══ */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-5 pt-5 pb-4 border-b border-gray-50">
             <div className="flex items-center justify-between mb-3">
@@ -209,20 +212,39 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
               />
             </div>
           </div>
+
           <div className="divide-y divide-gray-50">
             {todos.map((todo, i) => (
-              <Link key={i} href={todo.href} target={todo.href.startsWith('http') ? '_blank' : undefined}>
-                <div className={`flex items-center gap-3 px-5 py-3.5 hover:bg-gray-50 transition-colors ${todo.done ? 'opacity-50' : ''}`}>
-                  {todo.done
-                    ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />
-                    : <div className="h-5 w-5 shrink-0 rounded-full border-2 border-indigo-200 bg-indigo-50/60" />
-                  }
-                  <span className={`text-sm flex-1 ${todo.done ? 'line-through text-gray-400' : 'text-gray-800 font-medium'}`}>
-                    {todo.label}
-                  </span>
-                  {!todo.done && <ArrowRight className="h-3.5 w-3.5 text-gray-300 shrink-0" />}
-                </div>
-              </Link>
+              <div key={i} className={`flex items-center gap-3 px-5 py-3.5 ${todo.done ? 'opacity-45' : ''}`}>
+                {/* ステータスアイコン */}
+                {todo.done
+                  ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />
+                  : (
+                    <div className={`h-5 w-5 shrink-0 rounded-full border-2 ${todo.urgent ? 'border-orange-300 bg-orange-50' : 'border-indigo-200 bg-indigo-50/60'}`} />
+                  )
+                }
+
+                {/* ラベル */}
+                <span className={`text-sm flex-1 min-w-0 ${todo.done ? 'line-through text-gray-400' : todo.urgent ? 'text-gray-900 font-bold' : 'text-gray-800 font-medium'}`}>
+                  {todo.label}
+                </span>
+
+                {/* アクションボタン */}
+                {!todo.done && (
+                  <Link
+                    href={todo.href}
+                    target={todo.href.startsWith('http') ? '_blank' : undefined}
+                    className={`shrink-0 flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full transition-colors ${
+                      todo.urgent
+                        ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                        : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                    }`}
+                  >
+                    {todo.actionLabel}
+                    <ArrowRight className="h-3 w-3" />
+                  </Link>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -260,16 +282,11 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
           </div>
         )}
 
-        {/* ══ ⑤ お店の成長スコア ══ */}
-        <div>
-          <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3 px-0.5">お店の成長スコア</h2>
-          <ScoreCard score={score} items={scoreItems} month={monthLabel} />
-        </div>
-
-        {/* ══ ⑥ 今月の成果 ══ */}
+        {/* ══ ⑤ 今月の成果 ══ */}
         <div>
           <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3 px-0.5">今月の成果</h2>
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            {/* 広告ROASヘッダー */}
             <div className="px-5 py-4 bg-gradient-to-r from-indigo-50/80 to-white border-b border-gray-50">
               <p className="text-[11px] font-bold text-indigo-400 uppercase tracking-wide mb-1.5">{monthLabel}の広告効果</p>
               {monthSum.spend > 0 ? (
@@ -294,6 +311,8 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
                 </p>
               )}
             </div>
+
+            {/* 月次指標 2x2 */}
             <div className="grid grid-cols-2 divide-x divide-y divide-gray-50">
               {[
                 { label: 'LINE登録', value: formatNumber(monthSum.line_adds), growth: growthLine, unit: '%' },
@@ -311,57 +330,6 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-
-        {/* ══ ⑦ よく使う機能 ══ */}
-        <div>
-          <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3 px-0.5">よく使う機能</h2>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              {
-                href: `/dashboard/${params.storeId}/lp`,
-                icon: FileText,
-                label: 'LP を編集',
-                sub: lp ? '公開中' : '未作成',
-                color: 'text-blue-500',
-                bg: 'bg-blue-50',
-              },
-              {
-                href: `/dashboard/${params.storeId}/coupons`,
-                icon: Tag,
-                label: 'クーポン管理',
-                sub: `${activeCoupons?.length ?? 0}件 公開中`,
-                color: 'text-amber-500',
-                bg: 'bg-amber-50',
-              },
-              {
-                href: `/dashboard/${params.storeId}/inquiries`,
-                icon: MessageSquare,
-                label: '問い合わせ',
-                sub: resolvedInquiryCount > 0 ? `${resolvedInquiryCount}件 未対応` : '対応済み',
-                color: 'text-violet-500',
-                bg: 'bg-violet-50',
-              },
-              {
-                href: `/dashboard/${params.storeId}/reports`,
-                icon: TrendingUp,
-                label: '数字を確認',
-                sub: `${monthLabel}のレポート`,
-                color: 'text-emerald-500',
-                bg: 'bg-emerald-50',
-              },
-            ].map(({ href, icon: Icon, label, sub, color, bg }) => (
-              <Link key={href} href={href}>
-                <div className="bg-white rounded-2xl border border-gray-100 px-4 py-4 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group">
-                  <div className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${bg} mb-3 group-hover:scale-105 transition-transform`}>
-                    <Icon className={`h-[17px] w-[17px] ${color}`} />
-                  </div>
-                  <p className="text-sm font-bold text-gray-900">{label}</p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>
-                </div>
-              </Link>
-            ))}
           </div>
         </div>
 
