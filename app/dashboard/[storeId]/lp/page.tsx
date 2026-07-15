@@ -1,131 +1,165 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { FileText, ExternalLink, Edit, Globe, Clock, Plus } from 'lucide-react'
+import { FileText, ExternalLink, Edit, Globe, Clock, Info } from 'lucide-react'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
 
-export default async function LpListPage({ params }: { params: { storeId: string } }) {
-  const supabase = createClient()
-  const [{ data: lps }, { data: store }] = await Promise.all([
-    supabase.from('lp_pages').select('*').eq('store_id', params.storeId).is('deleted_at', null).order('updated_at', { ascending: false }),
-    supabase.from('stores').select('slug').eq('id', params.storeId).single(),
-  ])
-
-  const publishedCount = lps?.filter(l => l.status === 'published').length ?? 0
-
-  return (
-    <div className="min-h-full bg-gradient-to-b from-slate-50 to-white">
-      <div className="max-w-3xl mx-auto p-4 md:p-8 pb-24 md:pb-8">
-
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold">LP 管理</h1>
-            <p className="text-muted-foreground mt-1">
-              {lps?.length ?? 0}件 ·{' '}
-              <span className={publishedCount > 0 ? 'text-emerald-600 font-medium' : ''}>
-                {publishedCount > 0 ? `${publishedCount}件 公開中` : '公開なし'}
-              </span>
-            </p>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            LP作成・デザイン変更はパートナーへ
-          </div>
-        </div>
-
-        {/* List */}
-        {!lps || lps.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-muted-foreground/20 bg-card py-16 text-center">
-            <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-2xl bg-muted mb-4">
-              <FileText className="h-8 w-8 text-muted-foreground/50" />
-            </div>
-            <p className="font-semibold">LP まだありません</p>
-            <p className="text-sm text-muted-foreground mt-1">LP（ランディングページ）を作って集客を始めましょう。</p>
-            <Link href={`/dashboard/${params.storeId}/lp/new`}>
-              <button className="mt-5 flex items-center gap-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium px-5 py-2.5 hover:bg-primary/90 transition-colors mx-auto">
-                <Plus className="h-4 w-4" />
-                最初の LP を作る
-              </button>
-            </Link>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {lps.map(lp => {
-              const isPublished = lp.status === 'published'
-              return (
-                <div
-                  key={lp.id}
-                  className={cn(
-                    'rounded-2xl border bg-card overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5',
-                    isPublished && 'border-emerald-200 shadow-sm shadow-emerald-50'
-                  )}
-                >
-                  <div className="flex items-start gap-4 p-5">
-                    {/* Thumbnail */}
-                    {lp.main_image_url ? (
-                      <img src={lp.main_image_url} alt="" className="h-16 w-24 rounded-xl object-cover shrink-0" />
-                    ) : (
-                      <div className={cn(
-                        'flex h-16 w-24 shrink-0 items-center justify-center rounded-xl',
-                        isPublished ? 'bg-emerald-50' : 'bg-muted'
-                      )}>
-                        <FileText className={cn('h-6 w-6', isPublished ? 'text-emerald-500' : 'text-muted-foreground')} />
-                      </div>
-                    )}
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold text-sm truncate">{lp.title || '無題のLP'}</h3>
-                        <span className={cn(
-                          'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium',
-                          isPublished
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : lp.status === 'draft'
-                            ? 'bg-muted text-muted-foreground'
-                            : 'bg-muted text-muted-foreground'
-                        )}>
-                          {isPublished && <Globe className="h-3 w-3" />}
-                          {lp.status === 'draft' && <Clock className="h-3 w-3" />}
-                          {isPublished ? '公開中' : lp.status === 'draft' ? '下書き' : 'アーカイブ'}
-                        </span>
-                      </div>
-
-                      {lp.catch_copy && (
-                        <p className="text-sm text-muted-foreground mt-1 truncate">{lp.catch_copy}</p>
-                      )}
-
-                      <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {format(new Date(lp.updated_at), 'M月d日 更新', { locale: ja })}
-                      </p>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-2 shrink-0">
-                      {isPublished && store?.slug && (
-                        <Link href={`/lp/${store.slug}`} target="_blank">
-                          <button className="flex h-9 w-9 items-center justify-center rounded-xl border bg-card hover:bg-muted transition-colors">
-                            <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                          </button>
-                        </Link>
-                      )}
-                      <Link href={`/dashboard/${params.storeId}/lp/${lp.id}/edit`}>
-                        <button className="flex items-center gap-1.5 rounded-xl border bg-card px-3 py-2 text-xs font-medium hover:bg-muted transition-colors">
-                          <Edit className="h-3.5 w-3.5" />
-                          編集
-                        </button>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  )
+interface LandingPage {
+    id: string
+    title: string | null
+    slug: string | null
+    status: 'published' | 'draft' | string
+    thumbnail_url: string | null
+    line_button_url: string | null
+    updated_at: string
+    created_at: string
 }
+
+interface Props {
+    params: { storeId: string }
+}
+
+export default async function LpPage({ params }: Props) {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) redirect('/login')
+
+  const { data: pages, error } = await supabase
+      .from('landing_pages')
+      .select('*')
+      .eq('store_id', params.storeId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+
+  if (error) {
+        return (
+                <div className="min-h-full bg-gray-50/60 flex items-center justify-center">
+                        <p className="text-sm text-red-500">データの取得に失敗しました</p>p>
+                </div>div>
+              )
+  }
+  
+    const publishedCount = (pages ?? []).filter(p => p.status === 'published').length
+      
+        return (
+              <div className="min-h-full bg-gray-50/60">
+                    <div className="max-w-2xl mx-auto px-4 py-6 md:py-8 pb-28 md:pb-10 space-y-6">
+                    
+                            <div>
+                                      <h1 className="text-[22px] font-black tracking-tight text-gray-900">LP管理</h1>h1>
+                                      <p className="text-sm text-gray-400 mt-0.5">全 {(pages ?? []).length}件 ・ 公開中 {publishedCount}件</p>p>
+                            </div>div>
+                    
+                            <div className="rounded-2xl bg-blue-50 border border-blue-100 px-4 py-3.5 flex items-start gap-3">
+                                      <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                                      <p className="text-sm text-blue-700 leading-relaxed">
+                                                  LP作成・デザイン変更はパートナーにお問い合わせください。このページではLPの確認・プレビューができます。
+                                      </p>p>
+                            </div>div>
+                    
+                      {(pages ?? []).some(p => p.status === 'published' && !p.line_button_url) && (
+                          <div className="rounded-2xl bg-orange-50 border border-orange-100 px-4 py-3.5 flex items-start gap-3">
+                                      <Info className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
+                                      <div>
+                                                    <p className="text-sm text-orange-700 font-semibold">LINEボタンが未設定のLPがあります</p>p>
+                                                    <p className="text-xs text-orange-500 mt-0.5">LINEボタンを設定するとお問い合わせが増えます。パートナーに依頼してください。</p>p>
+                                      </div>div>
+                          </div>div>
+                            )}
+                    
+                      {(pages ?? []).length === 0 ? (
+                          <div className="rounded-2xl border border-dashed border-gray-200 bg-white py-16 text-center">
+                                      <FileText className="mx-auto h-9 w-9 text-gray-200 mb-3" />
+                                      <p className="text-sm font-semibold text-gray-400">LPはまだ作成されていません</p>p>
+                                      <p className="text-xs text-gray-400 mt-1">パートナーにLP作成をご依頼ください</p>p>
+                          </div>div>
+                        ) : (
+                          <div className="space-y-3">
+                            {(pages ?? []).map(page => {
+                                          const isPublished = page.status === 'published'
+                                                          const title = page.title ?? '無題のLP'
+                                                                          const previewUrl = page.slug ? `https://1page-studio.vercel.app/lp/${page.slug}` : null
+                                                                            
+                                                                                          return (
+                                                                                                            <div
+                                                                                                                                key={page.id}
+                                                                                                                                className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden"
+                                                                                                                              >
+                                                                                                              {page.thumbnail_url ? (
+                                                                                                                                                    <div className="relative h-36 w-full overflow-hidden bg-gray-100">
+                                                                                                                                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                                                                                                                                          <img
+                                                                                                                                                                                                    src={page.thumbnail_url}
+                                                                                                                                                                                                    alt={title}
+                                                                                                                                                                                                    className="w-full h-full object-cover object-top"
+                                                                                                                                                                                                  />
+                                                                                                                                                                          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                                                                                                                                                      </div>div>
+                                                                                                                                                  ) : (
+                                                                                                                                                    <div className="h-24 w-full bg-gradient-to-br from-indigo-50 to-blue-50 flex items-center justify-center">
+                                                                                                                                                                          <Globe className="h-10 w-10 text-indigo-200" />
+                                                                                                                                                      </div>div>
+                                                                                                                              )}
+                                                                                                            
+                                                                                                                              <div className="px-4 py-4">
+                                                                                                                                                  <div className="flex items-start justify-between gap-2">
+                                                                                                                                                                        <div className="flex-1 min-w-0">
+                                                                                                                                                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                                                                                                                                                                          <h3 className="font-bold text-sm text-gray-900 truncate">{title}</h3>h3>
+                                                                                                                                                                                                                          <span className={cn(
+                                                                                                                                                            'text-[10px] font-bold px-2 py-0.5 rounded-full',
+                                                                                                                                                            isPublished
+                                                                                                                                                              ? 'bg-emerald-50 text-emerald-700'
+                                                                                                                                                              : 'bg-gray-100 text-gray-500'
+                                                                                                                                                          )}>
+                                                                                                                                                                                                                                                      {isPublished ? '公開中' : '下書き'}
+                                                                                                                                                                                                                                                    </span>span>
+                                                                                                                                                                                                                          {!page.line_button_url && isPublished && (
+                                                                                                                                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-600">
+                                                                                                                                                                                          LINEボタン未設定
+                                                                                                                                                              </span>span>
+                                                                                                                                                                                                                          )}
+                                                                                                                                                                                                                        </div>div>
+                                                                                                                                                                                                <p className="flex items-center gap-1 text-[11px] text-gray-400 mt-1">
+                                                                                                                                                                                                                          <Clock className="h-3 w-3" />
+                                                                                                                                                                                                                          更新: {format(new Date(page.updated_at), 'M月d日', { locale: ja })}
+                                                                                                                                                                                                                        </p>p>
+                                                                                                                                                                          </div>div>
+                                                                                                                                                                        <div className="flex items-center gap-2 shrink-0">
+                                                                                                                                                                          {previewUrl && (
+                                                                                                                                                          <a
+                                                                                                                                                                                        href={previewUrl}
+                                                                                                                                                                                        target="_blank"
+                                                                                                                                                                                        rel="noopener noreferrer"
+                                                                                                                                                                                        className="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-indigo-600 transition-colors px-3 py-2 rounded-full hover:bg-indigo-50"
+                                                                                                                                                                                      >
+                                                                                                                                                                                      <ExternalLink className="h-3.5 w-3.5" />
+                                                                                                                                                                                      プレビュー
+                                                                                                                                                            </a>a>
+                                                                                                                                                                                                )}
+                                                                                                                                                                                                <Link
+                                                                                                                                                                                                                            href={`/dashboard/${params.storeId}/lp/${page.id}/edit`}
+                                                                                                                                                                                                                            className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors px-3 py-2 rounded-full hover:bg-indigo-50"
+                                                                                                                                                                                                                          >
+                                                                                                                                                                                                                          <Edit className="h-3.5 w-3.5" />
+                                                                                                                                                                                                                          編集
+                                                                                                                                                                                                                        </Link>Link>
+                                                                                                                                                                          </div>div>
+                                                                                                                                                    </div>div>
+                                                                                                                                {page.slug && (
+                                                                                                                                                      <p className="text-[10px] text-gray-300 mt-2 font-mono truncate">
+                                                                                                                                                                              /lp/{page.slug}
+                                                                                                                                                        </p>p>
+                                                                                                                                                  )}
+                                                                                                                                </div>div>
+                                                                                                              </div>div>
+                                                                                                          )
+                            })}
+                          </div>div>
+                            )}
+                    </div>div>
+              </div>div>
+            )
+}</div>
