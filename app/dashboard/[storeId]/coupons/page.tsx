@@ -1,63 +1,56 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { Tag, Plus, Calendar, ChevronRight, AlertCircle } from 'lucide-react'
+import { Ticket, Clock, Eye, EyeOff, BarChart2, Info } from 'lucide-react'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
-
-interface Coupon {
-  id: string
-  title: string
-  description: string | null
-  discount_type: string | null
-  discount_value: number | null
-  valid_from: string | null
-  valid_until: string | null
-  usage_limit: number | null
-  usage_count: number
-  is_active: boolean
-  created_at: string
-}
-
-function getCouponStatus(coupon: Coupon): {
-  label: string
-  color: string
-  bg: string
-  urgent?: boolean
-} {
-  if (!coupon.is_active) return { label: '無効', color: 'text-gray-500', bg: 'bg-gray-100' }
-
-  const now = new Date()
-  const until = coupon.valid_until ? new Date(coupon.valid_until) : null
-  const from = coupon.valid_from ? new Date(coupon.valid_from) : null
-
-  if (until && until < now) return { label: '期限切れ', color: 'text-red-600', bg: 'bg-red-50' }
-  if (from && from > now) return { label: '開始前', color: 'text-blue-600', bg: 'bg-blue-50' }
-
-  if (until) {
-    const daysLeft = Math.ceil((until.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-    if (daysLeft <= 7) return { label: `残${daysLeft}日`, color: 'text-orange-600', bg: 'bg-orange-50', urgent: true }
-  }
-
-  return { label: '有効', color: 'text-emerald-700', bg: 'bg-emerald-50' }
-}
-
-function formatDiscount(coupon: Coupon): string {
-  if (!coupon.discount_type || coupon.discount_value == null) return ''
-  if (coupon.discount_type === 'percent') return `${coupon.discount_value}% OFF`
-  if (coupon.discount_type === 'fixed') return `¥${coupon.discount_value.toLocaleString()} OFF`
-  return ''
-}
+import type { Coupon, CouponStatus } from '@/types'
 
 interface Props {
   params: { storeId: string }
 }
 
+function statusLabel(status: CouponStatus): string {
+  switch (status) {
+    case 'visible':  return '公開中'
+    case 'hidden':   return '非公開'
+    case 'expired':  return '期限切れ'
+    default:         return status
+  }
+}
+
+function StatusBadge({ status }: { status: CouponStatus }) {
+  const base = 'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold'
+  if (status === 'visible') {
+    return (
+      <span className={cn(base, 'bg-emerald-50 text-emerald-700')}>
+        <Eye className="h-2.5 w-2.5" />
+        {statusLabel(status)}
+      </span>
+    )
+  }
+  if (status === 'hidden') {
+    return (
+      <span className={cn(base, 'bg-gray-100 text-gray-500')}>
+        <EyeOff className="h-2.5 w-2.5" />
+        {statusLabel(status)}
+      </span>
+    )
+  }
+  // expired
+  return (
+    <span className={cn(base, 'bg-red-50 text-red-600')}>
+      <Clock className="h-2.5 w-2.5" />
+      {statusLabel(status)}
+    </span>
+  )
+}
+
 export default async function CouponsPage({ params }: Props) {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
   const { data: coupons, error } = await supabase
     .from('coupons')
@@ -74,111 +67,129 @@ export default async function CouponsPage({ params }: Props) {
     )
   }
 
-  const activeCoupons = (coupons ?? []).filter(c => {
-    const status = getCouponStatus(c)
-    return status.label === '有効' || status.urgent
-  })
+  const list = coupons ?? []
+  const visibleCount = list.filter(c => c.display_status === 'visible').length
+  const totalUses = list.reduce((s, c) => s + (c.usage_count ?? 0), 0)
 
   return (
     <div className="min-h-full bg-gray-50/60">
-      <div className="max-w-2xl mx-auto px-4 py-6 md:py-8 pb-28 md:pb-10 space-y-6">
+      <div className="max-w-2xl mx-auto px-4 py-6 md:py-8 pb-28 md:pb-10 space-y-5">
 
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-[22px] font-black tracking-tight text-gray-900">クーポン管理</h1>
-            <p className="text-sm text-gray-400 mt-0.5">全 {(coupons ?? []).length}件</p>
-          </div>
-          <Link
-            href={`/dashboard/${params.storeId}/coupons/new`}
-            className="flex items-center gap-1.5 bg-indigo-600 text-white text-sm font-bold px-4 py-2.5 rounded-full hover:bg-indigo-700 transition-colors shadow-sm"
-          >
-            <Plus className="h-4 w-4" />
-            新規作成
-          </Link>
+        {/* ヘッダー */}
+        <div>
+          <h1 className="text-[22px] font-black tracking-tight text-gray-900">クーポン管理</h1>
+          <p className="text-sm text-gray-400 mt-0.5">全 {list.length}件 · 公開中 {visibleCount}件</p>
         </div>
 
-        {activeCoupons.length > 0 && (
-          <div className="rounded-2xl bg-indigo-50 border border-indigo-100 px-4 py-3.5 flex items-center gap-3">
-            <Tag className="h-4 w-4 text-indigo-500 shrink-0" />
-            <p className="text-sm text-indigo-700 font-semibold">
-              現在 <span className="font-black">{activeCoupons.length}枚</span>のクーポンが有効です
-            </p>
+        {/* サマリーカード */}
+        {list.length > 0 && (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm">
+              <p className="text-xs text-gray-400 mb-1">公開中のクーポン</p>
+              <p className="text-2xl font-black text-indigo-600">{visibleCount}</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">件</p>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm">
+              <p className="text-xs text-gray-400 mb-1">累計利用回数</p>
+              <p className="text-2xl font-black text-emerald-600">{totalUses.toLocaleString()}</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">回</p>
+            </div>
           </div>
         )}
 
-        {(coupons ?? []).length === 0 ? (
+        {/* お知らせ */}
+        <div className="rounded-2xl bg-blue-50 border border-blue-100 px-4 py-3.5 flex items-start gap-3">
+          <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+          <p className="text-sm text-blue-700 leading-relaxed">
+            クーポンの作成・編集はパートナーにお問い合わせください。このページでは配信状況を確認できます。
+          </p>
+        </div>
+
+        {/* リスト */}
+        {list.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white py-16 text-center">
-            <Tag className="mx-auto h-9 w-9 text-gray-200 mb-3" />
-            <p className="text-sm font-semibold text-gray-400">クーポンはまだありません</p>
-            <Link
-              href={`/dashboard/${params.storeId}/coupons/new`}
-              className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700"
-            >
-              最初のクーポンを作成 <ChevronRight className="h-3 w-3" />
-            </Link>
+            <Ticket className="mx-auto h-9 w-9 text-gray-200 mb-3" />
+            <p className="text-sm font-semibold text-gray-400">クーポンはまだ作成されていません</p>
+            <p className="text-xs text-gray-300 mt-1">パートナーにクーポン作成をご依頼ください</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {(coupons ?? []).map(coupon => {
-              const status = getCouponStatus(coupon)
-              const discount = formatDiscount(coupon)
-              const isExpired = status.label === '期限切れ'
-              const isInactive = status.label === '無効'
-
+          <div className="space-y-3">
+            {list.map(coupon => {
+              const isExpired = coupon.display_status === 'expired'
               return (
-                <Link
+                <div
                   key={coupon.id}
-                  href={`/dashboard/${params.storeId}/coupons/${coupon.id}`}
                   className={cn(
-                    'flex items-start gap-3 rounded-2xl border bg-white px-4 py-4 shadow-sm hover:bg-gray-50/60 transition-colors',
-                    status.urgent ? 'border-orange-100' : 'border-gray-100',
-                    (isExpired || isInactive) && 'opacity-60'
+                    'rounded-2xl border bg-white shadow-sm overflow-hidden',
+                    isExpired ? 'border-gray-100 opacity-60' : 'border-gray-100',
                   )}
                 >
-                  <div className={cn(
-                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
-                    status.urgent ? 'bg-orange-100' : isExpired || isInactive ? 'bg-gray-100' : 'bg-indigo-50'
-                  )}>
-                    {status.urgent
-                      ? <AlertCircle className="h-5 w-5 text-orange-500" />
-                      : <Tag className={cn('h-5 w-5', isExpired || isInactive ? 'text-gray-400' : 'text-indigo-500')} />
-                    }
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-sm text-gray-900 truncate">{coupon.title}</span>
-                      <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full', status.bg, status.color)}>
-                        {status.label}
-                      </span>
-                      {discount && (
-                        <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-                          {discount}
-                        </span>
-                      )}
-                    </div>
-
-                    {coupon.description && (
-                      <p className="text-xs text-gray-400 mt-1 line-clamp-1">{coupon.description}</p>
+                  {/* カラーバー */}
+                  <div
+                    className={cn(
+                      'h-1.5 w-full',
+                      coupon.display_status === 'visible'
+                        ? 'bg-gradient-to-r from-indigo-500 to-violet-500'
+                        : coupon.display_status === 'hidden'
+                        ? 'bg-gray-200'
+                        : 'bg-red-200',
                     )}
+                  />
 
-                    <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                      {coupon.valid_until && (
-                        <span className="flex items-center gap-1 text-[11px] text-gray-400">
-                          <Calendar className="h-3 w-3" />
-                          {format(new Date(coupon.valid_until), 'M月d日まで', { locale: ja })}
-                        </span>
+                  <div className="px-4 py-4 space-y-3">
+                    {/* タイトル行 */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-bold text-sm text-gray-900">{coupon.coupon_name}</h3>
+                          <StatusBadge status={coupon.display_status as CouponStatus} />
+                        </div>
+                        {coupon.discount_description && (
+                          <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                            {coupon.discount_description}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* 利用回数 */}
+                      <div className="shrink-0 text-right">
+                        <div className="flex items-center gap-1 text-gray-400">
+                          <BarChart2 className="h-3 w-3" />
+                          <span className="text-[11px]">利用数</span>
+                        </div>
+                        <p className="text-xl font-black text-gray-800 tabular-nums">
+                          {(coupon.usage_count ?? 0).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 詳細行 */}
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                      {coupon.expiry_date && (
+                        <div className="flex items-center gap-1 text-[11px] text-gray-400">
+                          <Clock className="h-3 w-3" />
+                          <span>
+                            有効期限:{' '}
+                            <span className={cn('font-semibold', isExpired ? 'text-red-500' : 'text-gray-600')}>
+                              {format(new Date(coupon.expiry_date), 'yyyy年M月d日', { locale: ja })}
+                            </span>
+                          </span>
+                        </div>
                       )}
-                      {coupon.usage_limit != null && (
-                        <span className="text-[11px] text-gray-400">
-                          使用 {coupon.usage_count}/{coupon.usage_limit}回
-                        </span>
+                      {coupon.usage_conditions && (
+                        <div className="text-[11px] text-gray-400">
+                          <span className="font-semibold text-gray-500">利用条件:</span>{' '}
+                          {coupon.usage_conditions}
+                        </div>
                       )}
                     </div>
-                  </div>
 
-                  <ChevronRight className="h-4 w-4 text-gray-300 shrink-0 mt-1" />
-                </Link>
+                    {/* 作成日 */}
+                    <p className="text-[10px] text-gray-300">
+                      作成: {format(new Date(coupon.created_at), 'yyyy年M月d日', { locale: ja })}
+                    </p>
+                  </div>
+                </div>
               )
             })}
           </div>
