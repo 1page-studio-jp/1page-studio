@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
-import { FunnelChart, buildFunnelData } from '@/components/dashboard/funnel-chart'
+import { FunnelChart } from '@/components/dashboard/funnel-chart'
 import { Activity, ChevronDown } from 'lucide-react'
 
 interface Props {
@@ -34,7 +34,7 @@ export default async function FunnelPage({ params, searchParams }: Props) {
   const nextMonthDate = new Date(year, month, 1)
   const monthEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`
 
-  // ① 広告クリック + LP閲覧
+  // 広告データ
   const { data: adReports } = await supabase
     .from('ad_daily_reports')
     .select('clicks, lp_views, line_adds, conversions')
@@ -42,27 +42,18 @@ export default async function FunnelPage({ params, searchParams }: Props) {
     .gte('date', monthStart)
     .lt('date', monthEnd)
 
-  const adClicks   = (adReports ?? []).reduce((s, r) => s + (r.clicks    ?? 0), 0)
-  const lpViews    = (adReports ?? []).reduce((s, r) => s + (r.lp_views  ?? 0), 0)
-  const lineAdds   = (adReports ?? []).reduce((s, r) => s + (r.line_adds ?? 0), 0)
-  const visits     = (adReports ?? []).reduce((s, r) => s + (r.conversions ?? 0), 0)
+  const adClicks = (adReports ?? []).reduce((s, r) => s + (r.clicks    ?? 0), 0)
+  const lpViews  = (adReports ?? []).reduce((s, r) => s + (r.lp_views  ?? 0), 0)
+  const lineAdds = (adReports ?? []).reduce((s, r) => s + (r.line_adds ?? 0), 0)
+  const visits   = (adReports ?? []).reduce((s, r) => s + (r.conversions ?? 0), 0)
 
-  // ② クーポン取得
+  // クーポン取得数
   const { count: couponGets } = await supabase
     .from('coupon_usages')
     .select('id', { count: 'exact', head: true })
     .eq('store_id', params.storeId)
     .gte('created_at', `${monthStart}T00:00:00Z`)
     .lt('created_at', `${monthEnd}T00:00:00Z`)
-
-  const funnelData = buildFunnelData(
-    adClicks,
-    lpViews,
-    lineAdds,
-    couponGets ?? 0,
-    visits,
-    `${month}月`,
-  )
 
   // 月選択肢（過去6ヶ月）
   const monthOptions: { value: string; label: string }[] = []
@@ -85,7 +76,7 @@ export default async function FunnelPage({ params, searchParams }: Props) {
             <p className="text-sm text-gray-400 mt-0.5">広告から来店までの流れとボトルネックを確認</p>
           </div>
 
-          {/* 月選択 — JS不要のGETフォーム */}
+          {/* 月選択 */}
           <form method="GET" className="flex items-center gap-2">
             <div className="relative">
               <select
@@ -135,9 +126,16 @@ export default async function FunnelPage({ params, searchParams }: Props) {
           </div>
         )}
 
-        {/* ファネルチャート */}
+        {/* ファネルチャート — 数値だけ渡す（React コンポーネントは渡さない） */}
         {(adClicks > 0 || lpViews > 0) && (
-          <FunnelChart data={funnelData} />
+          <FunnelChart
+            adClicks={adClicks}
+            lpViews={lpViews}
+            lineAdds={lineAdds}
+            couponGets={couponGets ?? 0}
+            visits={visits}
+            period={`${month}月`}
+          />
         )}
       </div>
     </div>
