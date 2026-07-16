@@ -4,41 +4,39 @@ import { cn } from '@/lib/utils'
 import {
   MousePointerClick, FileText, Users, Tag, Store,
   AlertTriangle, TrendingDown, TrendingUp, ArrowRight,
-  Lightbulb, ChevronRight,
+  Lightbulb,
 } from 'lucide-react'
 
-export interface FunnelStep {
+// ============================================================
+// 型定義（icon はクライアント内部で管理、外部に渡さない）
+// ============================================================
+interface FunnelStep {
   id: 'ad_clicks' | 'lp_views' | 'line_adds' | 'coupon_gets' | 'visits'
   label: string
   sublabel: string
   value: number
-  icon: React.ElementType
-  color: string        // tailwind bg class
-  textColor: string    // tailwind text class
-  borderColor: string  // tailwind border class
-}
-
-export interface FunnelData {
-  steps: FunnelStep[]
-  period: string       // e.g. "7月"
+  color: string
+  textColor: string
 }
 
 interface StepConversion {
   step: FunnelStep
   nextStep: FunnelStep | null
-  rate: number | null        // conversion to next step (0–100)
+  rate: number | null
   isBottleneck: boolean
   isGood: boolean
 }
 
-// Advice per bottleneck step
+// ============================================================
+// ボトルネックごとのアドバイス
+// ============================================================
 const BOTTLENECK_ADVICE: Record<string, { title: string; actions: string[] }> = {
   lp_views: {
     title: 'LP への流入が少ない',
     actions: [
-      '広告のターゲット設定を「渋谷 縮毛矯正」などローカルキーワードに絞り込む',
+      '広告のターゲット設定をローカルキーワードに絞り込む',
       '広告の画像をビフォーアフター写真に変更する',
-      'Googleマップのプロフィールにウェブサイト（LP）リンクを追加する',
+      'Googleマップにウェブサイト（LP）リンクを追加する',
     ],
   },
   line_adds: {
@@ -46,14 +44,14 @@ const BOTTLENECK_ADVICE: Record<string, { title: string; actions: string[] }> = 
     actions: [
       'LP上部にLINE登録ボタンを大きく目立つように配置する',
       '「登録するとクーポンがもらえる」特典を明示する',
-      'LP のキャッチコピーをお客様の悩み（例: 縮毛が長持ちしない）に合わせる',
+      'LPのキャッチコピーをお客様の悩みに合わせる',
     ],
   },
   coupon_gets: {
     title: 'LINE登録後にクーポンを使ってもらえていない',
     actions: [
-      'LINE登録直後に自動でクーポンを配信するメッセージを設定する',
-      'クーポンの有効期限を短く設定して「今すぐ使いたい」気持ちにする',
+      'LINE登録直後に自動でクーポンを配信する',
+      'クーポンの有効期限を短く設定して今すぐ使いたい気持ちにする',
       '週1回、クーポンのリマインド配信を送る',
     ],
   },
@@ -67,8 +65,19 @@ const BOTTLENECK_ADVICE: Record<string, { title: string; actions: string[] }> = 
   },
 }
 
-const GOOD_RATE = 30  // conversion rate above this is "good"
-const WARN_RATE = 15  // below this is "bottleneck"
+// ============================================================
+// アイコンマップ（クライアント側で管理）
+// ============================================================
+const STEP_ICONS: Record<string, React.ElementType> = {
+  ad_clicks:   MousePointerClick,
+  lp_views:    FileText,
+  line_adds:   Users,
+  coupon_gets: Tag,
+  visits:      Store,
+}
+
+const GOOD_RATE = 30
+const WARN_RATE = 15
 
 function calcConversions(steps: FunnelStep[]): StepConversion[] {
   return steps.map((step, i) => {
@@ -77,7 +86,6 @@ function calcConversions(steps: FunnelStep[]): StepConversion[] {
       nextStep && step.value > 0
         ? Math.round((nextStep.value / step.value) * 100)
         : null
-
     return {
       step,
       nextStep,
@@ -88,7 +96,6 @@ function calcConversions(steps: FunnelStep[]): StepConversion[] {
   })
 }
 
-// Horizontal bar — width proportional to max value
 function FunnelBar({
   value,
   maxValue,
@@ -115,7 +122,6 @@ function FunnelBar({
   )
 }
 
-// Arrow + conversion rate between steps
 function ConversionArrow({
   rate,
   isBottleneck,
@@ -153,21 +159,44 @@ function ConversionArrow({
   )
 }
 
-interface FunnelChartProps {
-  data: FunnelData
+// ============================================================
+// Props: 数値のみ受け取る（React コンポーネントは渡さない）
+// ============================================================
+export interface FunnelChartProps {
+  adClicks: number
+  lpViews: number
+  lineAdds: number
+  couponGets: number
+  visits: number
+  period: string
   className?: string
 }
 
-export function FunnelChart({ data, className }: FunnelChartProps) {
-  const conversions = calcConversions(data.steps)
-  const maxValue = Math.max(...data.steps.map(s => s.value), 1)
+export function FunnelChart({
+  adClicks,
+  lpViews,
+  lineAdds,
+  couponGets,
+  visits,
+  period,
+  className,
+}: FunnelChartProps) {
+  // アイコン・ラベルはクライアント側で組み立て
+  const steps: FunnelStep[] = [
+    { id: 'ad_clicks',   label: '広告クリック',   sublabel: '広告を見てLPに来た人',       value: adClicks,   color: 'bg-blue-500',    textColor: 'text-blue-600'    },
+    { id: 'lp_views',    label: 'LP閲覧',         sublabel: 'ランディングページを見た人',   value: lpViews,    color: 'bg-violet-500',  textColor: 'text-violet-600'  },
+    { id: 'line_adds',   label: 'LINE登録',        sublabel: '友だち追加してくれた人',       value: lineAdds,   color: 'bg-emerald-500', textColor: 'text-emerald-600' },
+    { id: 'coupon_gets', label: 'クーポン取得',    sublabel: 'クーポンを受け取った人',       value: couponGets, color: 'bg-amber-500',   textColor: 'text-amber-600'   },
+    { id: 'visits',      label: '来店',            sublabel: '実際にご来店いただいた方',     value: visits,     color: 'bg-rose-500',    textColor: 'text-rose-600'    },
+  ]
 
-  // Find worst bottleneck (lowest rate, excluding null)
+  const conversions = calcConversions(steps)
+  const maxValue = Math.max(...steps.map(s => s.value), 1)
+
   const bottleneckStep = conversions
     .filter(c => c.rate !== null && c.isBottleneck)
     .sort((a, b) => (a.rate ?? 99) - (b.rate ?? 99))[0] ?? null
 
-  // Even if no step is technically below threshold, find the worst
   const worstStep =
     bottleneckStep ??
     conversions
@@ -180,10 +209,9 @@ export function FunnelChart({ data, className }: FunnelChartProps) {
   return (
     <div className={cn('space-y-1', className)}>
       {conversions.map(({ step, nextStep, rate, isBottleneck, isGood }, i) => {
-        const Icon = step.icon
+        const Icon = STEP_ICONS[step.id]
         return (
           <div key={step.id}>
-            {/* Step card */}
             <div
               className={cn(
                 'rounded-2xl border bg-white p-4 transition-all',
@@ -193,7 +221,6 @@ export function FunnelChart({ data, className }: FunnelChartProps) {
               )}
             >
               <div className="flex items-center gap-3 mb-3">
-                {/* Step number */}
                 <div
                   className={cn(
                     'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white',
@@ -202,26 +229,17 @@ export function FunnelChart({ data, className }: FunnelChartProps) {
                 >
                   {i + 1}
                 </div>
-                {/* Icon */}
-                <div
-                  className={cn(
-                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
-                    step.color.replace('bg-', 'bg-').replace('-500', '-50').replace('-600', '-50'),
-                  )}
-                >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-50">
                   <Icon className={cn('h-4 w-4', step.textColor)} />
                 </div>
-                {/* Label */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-800">{step.label}</p>
-                  <p className="text-[11px] text-muted-foreground">{step.sublabel}</p>
+                  <p className="text-[11px] text-gray-400">{step.sublabel}</p>
                 </div>
-                {/* Value */}
                 <div className="text-right shrink-0">
                   <p className={cn('text-2xl font-black tabular-nums', step.textColor)}>
                     {step.value.toLocaleString()}
                   </p>
-                  {/* Bottleneck badge */}
                   {isBottleneck && nextStep && (
                     <span className="inline-flex items-center gap-0.5 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
                       <AlertTriangle className="h-2.5 w-2.5" />
@@ -231,7 +249,6 @@ export function FunnelChart({ data, className }: FunnelChartProps) {
                 </div>
               </div>
 
-              {/* Bar */}
               <FunnelBar
                 value={step.value}
                 maxValue={maxValue}
@@ -240,7 +257,6 @@ export function FunnelChart({ data, className }: FunnelChartProps) {
               />
             </div>
 
-            {/* Conversion arrow */}
             {nextStep && (
               <ConversionArrow rate={rate} isBottleneck={isBottleneck} isGood={isGood} />
             )}
@@ -248,7 +264,6 @@ export function FunnelChart({ data, className }: FunnelChartProps) {
         )
       })}
 
-      {/* Bottleneck advice card */}
       {worstStep && advice && (
         <div className="mt-4 rounded-2xl border-2 border-orange-200 bg-orange-50/60 p-5">
           <div className="flex items-start gap-3 mb-4">
@@ -280,70 +295,4 @@ export function FunnelChart({ data, className }: FunnelChartProps) {
       )}
     </div>
   )
-}
-
-// Default step definitions (values filled in at page level)
-export function buildFunnelData(
-  adClicks: number,
-  lpViews: number,
-  lineAdds: number,
-  couponGets: number,
-  visits: number,
-  period: string,
-): FunnelData {
-  return {
-    period,
-    steps: [
-      {
-        id: 'ad_clicks',
-        label: '広告クリック',
-        sublabel: '広告を見てLPに来た人',
-        value: adClicks,
-        icon: MousePointerClick,
-        color: 'bg-blue-500',
-        textColor: 'text-blue-600',
-        borderColor: 'border-blue-200',
-      },
-      {
-        id: 'lp_views',
-        label: 'LP閲覧',
-        sublabel: 'ランディングページを見た人',
-        value: lpViews,
-        icon: FileText,
-        color: 'bg-violet-500',
-        textColor: 'text-violet-600',
-        borderColor: 'border-violet-200',
-      },
-      {
-        id: 'line_adds',
-        label: 'LINE登録',
-        sublabel: '友だち追加してくれた人',
-        value: lineAdds,
-        icon: Users,
-        color: 'bg-emerald-500',
-        textColor: 'text-emerald-600',
-        borderColor: 'border-emerald-200',
-      },
-      {
-        id: 'coupon_gets',
-        label: 'クーポン取得',
-        sublabel: 'クーポンを受け取った人',
-        value: couponGets,
-        icon: Tag,
-        color: 'bg-amber-500',
-        textColor: 'text-amber-600',
-        borderColor: 'border-amber-200',
-      },
-      {
-        id: 'visits',
-        label: '来店',
-        sublabel: '実際にご来店いただいた方',
-        value: visits,
-        icon: Store,
-        color: 'bg-rose-500',
-        textColor: 'text-rose-600',
-        borderColor: 'border-rose-200',
-      },
-    ],
-  }
 }
