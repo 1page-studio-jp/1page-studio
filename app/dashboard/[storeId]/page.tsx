@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { MetricCard } from '@/components/dashboard/metric-card'
 import { ScoreCard, type ScoreItem } from '@/components/dashboard/score-card'
 import { AiCommentBox } from '@/components/dashboard/ai-comment-box'
+import { AiHomeInsight } from '@/components/dashboard/ai-home-insight'
 import Link from 'next/link'
 import {
   CalendarCheck, MessageSquare, UserPlus, TrendingUp,
@@ -215,6 +216,9 @@ export default async function StoreDashboard({ params }: { params: { storeId: st
             ))}
           </div>
         </div>
+
+        {/* ══ ② AIアドバイス ════════════════════════════════ */}
+        <AiHomeInsight storeId={params.storeId} />
 
         {/* ══ ③ 今日の数字（4指標） ══════════════════════════ */}
         <div>
