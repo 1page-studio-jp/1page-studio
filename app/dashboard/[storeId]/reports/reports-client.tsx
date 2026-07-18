@@ -8,21 +8,23 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ComposedChart, Area,
 } from 'recharts'
-import { TrendingUp, TrendingDown, Minus, Plus, BarChart3, ClipboardList, CheckCircle2 } from 'lucide-react'
+import { TrendingUp, Plus, BarChart3, ClipboardList, CheckCircle2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
 
+// DBの実際のフィールド名に合わせた型定義
 interface AdReport {
   id: string
   date: string
   platform: string
   impressions: number
   clicks: number
-  spend: number
-  conversions: number
-  revenue: number
+  cost: number       // 広告費（旧 spend）
+  sales: number      // 売上（旧 revenue）
+  inquiries: number  // 問い合わせ数（旧 conversions）
   line_adds: number
+  lp_views: number
   data_source: string
 }
 
@@ -34,25 +36,36 @@ interface ReportsClientProps {
 
 function aggregateByDate(reports: AdReport[]) {
   const map: Record<string, {
-    date: string; spend: number; revenue: number; clicks: number
-    impressions: number; conversions: number; line_adds: number
+    date: string
+    cost: number
+    sales: number
+    clicks: number
+    impressions: number
+    inquiries: number
+    line_adds: number
   }> = {}
+
   for (const r of reports) {
     if (!map[r.date]) {
-      map[r.date] = { date: r.date, spend: 0, revenue: 0, clicks: 0, impressions: 0, conversions: 0, line_adds: 0 }
+      map[r.date] = {
+        date: r.date,
+        cost: 0, sales: 0, clicks: 0,
+        impressions: 0, inquiries: 0, line_adds: 0,
+      }
     }
-    map[r.date].spend       += r.spend       ?? 0
-    map[r.date].revenue     += r.revenue     ?? 0
-    map[r.date].clicks      += r.clicks      ?? 0
+    map[r.date].cost       += r.cost       ?? 0
+    map[r.date].sales      += r.sales      ?? 0
+    map[r.date].clicks     += r.clicks     ?? 0
     map[r.date].impressions += r.impressions ?? 0
-    map[r.date].conversions += r.conversions ?? 0
-    map[r.date].line_adds   += r.line_adds   ?? 0
+    map[r.date].inquiries  += r.inquiries  ?? 0
+    map[r.date].line_adds  += r.line_adds  ?? 0
   }
+
   return Object.values(map).map(d => ({
     ...d,
     label: format(new Date(d.date), 'M/d', { locale: ja }),
-    roas: d.spend > 0 ? Math.round((d.revenue / d.spend) * 100) / 100 : 0,
-    cpa:  d.conversions > 0 ? Math.round(d.spend / d.conversions) : 0,
+    roas: d.cost > 0 ? Math.round((d.sales / d.cost) * 100) / 100 : 0,
+    cpa:  d.inquiries > 0 ? Math.round(d.cost / d.inquiries) : 0,
     ctr:  d.impressions > 0 ? Math.round((d.clicks / d.impressions) * 1000) / 10 : 0,
   }))
 }
@@ -60,27 +73,34 @@ function aggregateByDate(reports: AdReport[]) {
 export function ReportsClient({ storeId, reports, inquiries }: ReportsClientProps) {
   const [tab, setTab] = useState<'chart' | 'input'>('chart')
   const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
-    platform: 'google_ads',
-    impressions: '', clicks: '', spend: '',
-    conversions: '', revenue: '', line_adds: '',
+    date:        new Date().toISOString().split('T')[0],
+    platform:    'google_ads',
+    impressions: '',
+    clicks:      '',
+    cost:        '',   // 広告費
+    sales:       '',   // 売上
+    inquiries:   '',   // コンバージョン（問い合わせ数）
+    line_adds:   '',
   })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState('')
+  const [success, setSuccess]   = useState(false)
 
-  const daily = aggregateByDate(reports)
-  const totals = daily.reduce((acc, d) => ({
-    spend: acc.spend + d.spend,
-    revenue: acc.revenue + d.revenue,
-    clicks: acc.clicks + d.clicks,
-    impressions: acc.impressions + d.impressions,
-    conversions: acc.conversions + d.conversions,
-    line_adds: acc.line_adds + d.line_adds,
-  }), { spend: 0, revenue: 0, clicks: 0, impressions: 0, conversions: 0, line_adds: 0 })
+  const daily  = aggregateByDate(reports)
+  const totals = daily.reduce(
+    (acc, d) => ({
+      cost:        acc.cost        + d.cost,
+      sales:       acc.sales       + d.sales,
+      clicks:      acc.clicks      + d.clicks,
+      impressions: acc.impressions + d.impressions,
+      inquiries:   acc.inquiries   + d.inquiries,
+      line_adds:   acc.line_adds   + d.line_adds,
+    }),
+    { cost: 0, sales: 0, clicks: 0, impressions: 0, inquiries: 0, line_adds: 0 }
+  )
 
-  const totalRoas = totals.spend > 0 ? Math.round((totals.revenue / totals.spend) * 100) / 100 : 0
-  const totalCpa  = totals.conversions > 0 ? Math.round(totals.spend / totals.conversions) : 0
+  const totalRoas = totals.cost > 0 ? Math.round((totals.sales / totals.cost) * 100) / 100 : 0
+  const totalCpa  = totals.inquiries > 0 ? Math.round(totals.cost / totals.inquiries) : 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -89,24 +109,28 @@ export function ReportsClient({ storeId, reports, inquiries }: ReportsClientProp
     setSuccess(false)
     try {
       const res = await fetch('/api/reports', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          store_id: storeId,
-          date: form.date,
-          platform: form.platform,
+          store_id:    storeId,
+          date:        form.date,
+          platform:    form.platform,
           impressions: Number(form.impressions) || 0,
           clicks:      Number(form.clicks)      || 0,
-          spend:       Number(form.spend)        || 0,
-          conversions: Number(form.conversions)  || 0,
-          revenue:     Number(form.revenue)      || 0,
-          line_adds:   Number(form.line_adds)    || 0,
+          cost:        Number(form.cost)        || 0,
+          sales:       Number(form.sales)       || 0,
+          inquiries:   Number(form.inquiries)   || 0,
+          line_adds:   Number(form.line_adds)   || 0,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || '登録に失敗しました')
       setSuccess(true)
-      setForm(f => ({ ...f, impressions: '', clicks: '', spend: '', conversions: '', revenue: '', line_adds: '' }))
+      setForm(f => ({
+        ...f,
+        impressions: '', clicks: '', cost: '',
+        sales: '', inquiries: '', line_adds: '',
+      }))
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -152,7 +176,6 @@ export function ReportsClient({ storeId, reports, inquiries }: ReportsClientProp
             <p className="text-sm text-gray-400 mt-0.5">過去30日間の広告パフォーマンス</p>
           </div>
 
-          {/* タブ切り替え */}
           <div className="flex gap-1 p-1 bg-white border border-gray-100 rounded-2xl shadow-sm">
             <button
               onClick={() => setTab('chart')}
@@ -183,10 +206,10 @@ export function ReportsClient({ storeId, reports, inquiries }: ReportsClientProp
             {/* KPI */}
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: '広告費', value: formatCurrency(totals.spend) },
-                { label: '売上（広告経由）', value: formatCurrency(totals.revenue) },
-                { label: 'ROAS', value: `${totalRoas}x` },
-                { label: 'CPA', value: totalCpa > 0 ? formatCurrency(totalCpa) : '—' },
+                { label: '広告費',       value: formatCurrency(totals.cost)  },
+                { label: '売上（広告経由）', value: formatCurrency(totals.sales) },
+                { label: 'ROAS',         value: `${totalRoas}x`              },
+                { label: 'CPA',          value: totalCpa > 0 ? formatCurrency(totalCpa) : '—' },
               ].map(({ label, value }) => (
                 <div key={label} className="rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">{label}</p>
@@ -222,8 +245,8 @@ export function ReportsClient({ storeId, reports, inquiries }: ReportsClientProp
                         contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #e5e7eb' }}
                       />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Area type="monotone" dataKey="revenue" fill="#eef2ff" stroke="#6366f1" strokeWidth={2} name="売上" dot={false} />
-                      <Bar dataKey="spend" fill="#d1d5db" name="広告費" radius={[3, 3, 0, 0]} />
+                      <Area type="monotone" dataKey="sales" fill="#eef2ff" stroke="#6366f1" strokeWidth={2} name="売上" dot={false} />
+                      <Bar dataKey="cost" fill="#d1d5db" name="広告費" radius={[3, 3, 0, 0]} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -256,7 +279,7 @@ export function ReportsClient({ storeId, reports, inquiries }: ReportsClientProp
                       <YAxis tick={{ fontSize: 10 }} width={30} />
                       <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #e5e7eb' }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey="clicks" fill="#a5b4fc" name="クリック" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="clicks"    fill="#a5b4fc" name="クリック"   radius={[3, 3, 0, 0]} />
                       <Bar dataKey="line_adds" fill="#34d399" name="LINE登録" radius={[3, 3, 0, 0]} />
                     </ComposedChart>
                   </ResponsiveContainer>
@@ -303,8 +326,8 @@ export function ReportsClient({ storeId, reports, inquiries }: ReportsClientProp
                     className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400"
                   >
                     <option value="google_ads">Google 広告</option>
-                    <option value="meta_ads">Meta 広告</option>
-                    <option value="line_ads">LINE 広告</option>
+                    <option value="facebook">Meta 広告</option>
+                    <option value="line">LINE 広告</option>
                     <option value="other">その他</option>
                   </select>
                 </div>
@@ -313,10 +336,10 @@ export function ReportsClient({ storeId, reports, inquiries }: ReportsClientProp
               <div className="grid grid-cols-2 gap-3">
                 {inputField('impressions', 'インプレッション', '1000')}
                 {inputField('clicks',      'クリック数',       '50')}
-                {inputField('spend',       '広告費',           '5000', '¥')}
-                {inputField('conversions', 'コンバージョン',    '3')}
-                {inputField('revenue',     '売上',             '15000', '¥')}
-                {inputField('line_adds',   'LINE登録数',        '10')}
+                {inputField('cost',        '広告費',           '5000', '¥')}
+                {inputField('sales',       '売上',             '15000', '¥')}
+                {inputField('inquiries',   'コンバージョン数', '3')}
+                {inputField('line_adds',   'LINE登録数',       '10')}
               </div>
 
               <button
