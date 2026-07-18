@@ -9,9 +9,9 @@ import { cn } from '@/lib/utils'
 interface LandingPage {
   id: string
   title: string | null
-  slug: string | null
-  status: 'published' | 'draft' | string
-  thumbnail_url: string | null
+  main_image_url: string | null
+  published_url: string | null
+  status: 'published' | 'draft' | 'archived' | string
   line_button_url: string | null
   updated_at: string
   created_at: string
@@ -27,8 +27,8 @@ export default async function LpPage({ params }: Props) {
   if (!session) redirect('/login')
 
   const { data: pages, error } = await supabase
-    .from('landing_pages')
-    .select('*')
+    .from('lp_pages')
+    .select('id, title, main_image_url, published_url, status, line_button_url, updated_at, created_at')
     .eq('store_id', params.storeId)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
@@ -84,7 +84,7 @@ export default async function LpPage({ params }: Props) {
             {(pages ?? []).map(page => {
               const isPublished = page.status === 'published'
               const title = page.title ?? '無題のLP'
-              const previewUrl = page.slug ? `https://1page-studio.vercel.app/lp/${page.slug}` : null
+              const previewUrl = page.published_url ?? null
 
               return (
                 <div
@@ -92,11 +92,11 @@ export default async function LpPage({ params }: Props) {
                   className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden"
                 >
                   {/* サムネイル */}
-                  {page.thumbnail_url ? (
+                  {page.main_image_url ? (
                     <div className="relative h-36 w-full overflow-hidden bg-gray-100">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={page.thumbnail_url}
+                        src={page.main_image_url}
                         alt={title}
                         className="w-full h-full object-cover object-top"
                       />
@@ -120,7 +120,7 @@ export default async function LpPage({ params }: Props) {
                               ? 'bg-emerald-50 text-emerald-700'
                               : 'bg-gray-100 text-gray-500'
                           )}>
-                            {isPublished ? '公開中' : '下書き'}
+                            {isPublished ? '公開中' : page.status === 'archived' ? 'アーカイブ' : '下書き'}
                           </span>
                           {!page.line_button_url && isPublished && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-600">
@@ -158,9 +158,9 @@ export default async function LpPage({ params }: Props) {
                       </div>
                     </div>
 
-                    {page.slug && (
+                    {previewUrl && (
                       <p className="text-[10px] text-gray-300 mt-2 font-mono truncate">
-                        /lp/{page.slug}
+                        {previewUrl}
                       </p>
                     )}
                   </div>
