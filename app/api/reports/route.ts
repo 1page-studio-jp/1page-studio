@@ -41,27 +41,30 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const {
-      store_id, date, platform, impressions, clicks, spend,
-      conversions, revenue, line_adds,
+      store_id, date, platform,
+      impressions, clicks,
+      cost,        // 広告費
+      sales,       // 売上
+      inquiries,   // コンバージョン（問い合わせ数）
+      line_adds,
     } = body
 
     if (!store_id || !date || !platform) {
       return NextResponse.json({ error: 'store_id, date, platform は必須です' }, { status: 400 })
     }
 
-    // Upsert (同日・同プラットフォームは上書き)
     const { data: report, error } = await supabase
       .from('ad_daily_reports')
       .upsert({
         store_id,
         date,
         platform,
-        impressions: impressions || 0,
-        clicks: clicks || 0,
-        spend: spend || 0,
-        conversions: conversions || 0,
-        revenue: revenue || 0,
-        line_adds: line_adds || 0,
+        impressions:  impressions  || 0,
+        clicks:       clicks       || 0,
+        cost:         cost         || 0,
+        sales:        sales        || 0,
+        inquiries:    inquiries    || 0,
+        line_adds:    line_adds    || 0,
         data_source: 'manual',
       }, { onConflict: 'store_id,date,platform' })
       .select()
