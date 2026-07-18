@@ -87,7 +87,7 @@ export function ReportsClient({ storeId, reports, inquiries }: ReportsClientProp
   const [success, setSuccess]   = useState(false)
 
   // AI インサイト
-  const [aiInsight, setAiInsight] = useState<{ comment: string; todos: string[] } | null>(null)
+  const [aiInsight, setAiInsight] = useState<{ headline?: string; comment: string; todos: string[] } | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError]     = useState('')
 
@@ -102,7 +102,7 @@ export function ReportsClient({ storeId, reports, inquiries }: ReportsClientProp
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'AIの分析に失敗しました')
-      setAiInsight({ comment: data.comment, todos: data.todos ?? [] })
+      setAiInsight({ headline: data.headline, comment: data.comment, todos: data.todos ?? [] })
     } catch (err: any) {
       setAiError(err.message)
     } finally {
@@ -277,6 +277,9 @@ export function ReportsClient({ storeId, reports, inquiries }: ReportsClientProp
 
                 {aiInsight && !aiLoading && (
                   <div className="space-y-3">
+                    {aiInsight.headline && (
+                      <p className="text-[15px] font-black text-indigo-700 leading-snug">{aiInsight.headline}</p>
+                    )}
                     <p className="text-sm text-gray-700 leading-relaxed">{aiInsight.comment}</p>
                     {aiInsight.todos.length > 0 && (
                       <div className="space-y-1.5 pt-1">
