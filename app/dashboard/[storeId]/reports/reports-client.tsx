@@ -8,7 +8,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ComposedChart, Area,
 } from 'recharts'
-import { TrendingUp, Plus, BarChart3, ClipboardList, CheckCircle2 } from 'lucide-react'
+import { TrendingUp, Plus, BarChart3, ClipboardList, CheckCircle2, Sparkles, ChevronRight } from 'lucide-react'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
@@ -85,6 +85,30 @@ export function ReportsClient({ storeId, reports, inquiries }: ReportsClientProp
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const [success, setSuccess]   = useState(false)
+
+  // AI インサイト
+  const [aiInsight, setAiInsight] = useState<{ comment: string; todos: string[] } | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError]     = useState('')
+
+  const fetchInsight = async () => {
+    setAiLoading(true)
+    setAiError('')
+    try {
+      const res  = await fetch('/api/ai/insights', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ store_id: storeId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'AIの分析に失敗しました')
+      setAiInsight({ comment: data.comment, todos: data.todos ?? [] })
+    } catch (err: any) {
+      setAiError(err.message)
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   const daily  = aggregateByDate(reports)
   const totals = daily.reduce(
@@ -217,6 +241,71 @@ export function ReportsClient({ storeId, reports, inquiries }: ReportsClientProp
                 </div>
               ))}
             </div>
+
+            {/* ── AIインサイト ──────────────────────────────── */}
+            {daily.length > 0 && (
+              <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-indigo-600">
+                      <Sparkles className="h-3.5 w-3.5 text-white" />
+                    </div>
+                    <p className="text-sm font-black text-gray-900">AIアドバイス</p>
+                  </div>
+                  {!aiInsight && (
+                    <button
+                      onClick={fetchInsight}
+                      disabled={aiLoading}
+                      className="flex items-center gap-1 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                    >
+                      {aiLoading ? '分析中...' : '今すぐ分析'}
+                      {!aiLoading && <ChevronRight className="h-3 w-3" />}
+                    </button>
+                  )}
+                </div>
+
+                {aiLoading && (
+                  <div className="flex items-center gap-2 py-3">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-300 border-t-indigo-600" />
+                    <p className="text-xs text-gray-400">30日間のデータを分析しています...</p>
+                  </div>
+                )}
+
+                {aiError && (
+                  <p className="text-xs text-red-500 mt-1">{aiError}</p>
+                )}
+
+                {aiInsight && !aiLoading && (
+                  <div className="space-y-3">
+                    <p className="text-sm text-gray-700 leading-relaxed">{aiInsight.comment}</p>
+                    {aiInsight.todos.length > 0 && (
+                      <div className="space-y-1.5 pt-1">
+                        {aiInsight.todos.map((todo, i) => (
+                          <div key={i} className="flex items-start gap-2">
+                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-600">
+                              {i + 1}
+                            </span>
+                            <p className="text-xs font-medium text-gray-700">{todo}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      onClick={fetchInsight}
+                      className="text-[11px] font-bold text-indigo-400 hover:text-indigo-600 transition-colors"
+                    >
+                      再分析する
+                    </button>
+                  </div>
+                )}
+
+                {!aiInsight && !aiLoading && !aiError && (
+                  <p className="text-xs text-gray-400">
+                    過去30日間のデータをAIが分析して、今週やるべきことを教えてくれます。
+                  </p>
+                )}
+              </div>
+            )}
 
             {daily.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-gray-200 bg-white py-16 text-center">
