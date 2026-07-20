@@ -1,8 +1,6 @@
-import OpenAI from 'openai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
 export interface StoreMetricsForAI {
   storeName: string
@@ -81,18 +79,15 @@ LINE登録: ${metrics.lineAdds}件（登録率${metrics.lineAddRate.toFixed(1)}%
 - todosは優先順位をつけて、最も効果的なものを1番に
 `
 
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [{ role: 'user', content: prompt }],
-    response_format: { type: 'json_object' },
-    temperature: 0.7,
-  })
-
-  const result = JSON.parse(response.choices[0].message.content ?? '{}')
+  const geminiModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const geminiResult = await geminiModel.generateContent(prompt)
+  const geminiText = geminiResult.response.text().trim()
+  const jsonMatch1 = geminiText.match(/\{[\s\S]*\}/)
+  const result = JSON.parse(jsonMatch1 ? jsonMatch1[0] : '{}')
   return {
-    headline:    result.headline    ?? '',
-    comment:     result.comment     ?? '',
-    todos:       result.todos       ?? [],
+    headline: result.headline ?? '',
+    comment: result.comment ?? '',
+    todos: result.todos ?? [],
     suggestions: result.suggestions ?? [],
   }
 }
@@ -131,14 +126,11 @@ export async function generateLpContent(input: {
 }
 `
 
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [{ role: 'user', content: prompt }],
-    response_format: { type: 'json_object' },
-    temperature: 0.8,
-  })
-
-  const result = JSON.parse(response.choices[0].message.content ?? '{}')
+  const geminiModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const geminiResult = await geminiModel.generateContent(prompt)
+  const geminiText = geminiResult.response.text().trim()
+  const jsonMatch2 = geminiText.match(/\{[\s\S]*\}/)
+  const result = JSON.parse(jsonMatch2 ? jsonMatch2[0] : '{}')
   return {
     catchCopy: result.catchCopy ?? '',
     serviceDescription: result.serviceDescription ?? '',
@@ -147,4 +139,4 @@ export async function generateLpContent(input: {
   }
 }
 
-export default openai
+export default genAI
