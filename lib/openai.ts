@@ -79,7 +79,7 @@ LINE登録: ${metrics.lineAdds}件（登録率${metrics.lineAddRate.toFixed(1)}%
 - todosは優先順位をつけて、最も効果的なものを1番に
 `
 
-  const geminiModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const geminiModel = genAI.getGenerativeModel({ model: 'gemini-pro' })
   const geminiResult = await geminiModel.generateContent(prompt)
   const geminiText = geminiResult.response.text().trim()
   const jsonMatch1 = geminiText.match(/\{[\s\S]*\}/)
@@ -126,7 +126,7 @@ export async function generateLpContent(input: {
 }
 `
 
-  const geminiModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const geminiModel = genAI.getGenerativeModel({ model: 'gemini-pro' })
   const geminiResult = await geminiModel.generateContent(prompt)
   const geminiText = geminiResult.response.text().trim()
   const jsonMatch2 = geminiText.match(/\{[\s\S]*\}/)
